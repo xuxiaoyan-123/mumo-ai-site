@@ -1,0 +1,589 @@
+﻿import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import {
+  adminListModelsConfig,
+  adminUpdateModel,
+  adminCreateModel,
+  adminDeleteModel,
+  adminGetGlobalConfig,
+  adminUpdateGlobalConfig,
+  adminTestModel,
+} from "@/lib/admin.functions";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
+import { Pencil, RefreshCw, Sparkles, Plus, Trash2, KeyRound, Link as LinkIcon, Globe, Save, FlaskConical, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+
+type ModelCfg = {
+  id: string; model_key: string; name: string; description: string | null;
+  cost: number; api_url: string | null; api_key: string | null;
+  request_format: "async_id" | "sync_url" | null;
+  prompt_key: string | null;
+  fetch_url: string | null;
+  extra_params?: Record<string, unknown> | null;
+  is_enabled?: boolean;
+  sort_order?: number; updated_at: string;
+};
+
+type EditState = {
+  id: string;
+  name: string;
+  model_key: string;
+  description: string;
+  cost: string;
+  api_url: string;
+  api_key: string;
+  request_format: "async_id" | "sync_url";
+  prompt_key: string;
+  fetch_url: string;
+  ui_badge_enabled: boolean;
+  ui_badge_text: string;
+  ui_badge_color: string;
+  ui_default_model: boolean;
+  extra_params: string; // raw JSON string in textarea
+};
+
+const empty = (): EditState => ({
+  id: "", name: "", model_key: "", description: "", cost: "1",
+  api_url: "", api_key: "", request_format: "async_id", prompt_key: "prompt", fetch_url: "",
+  ui_badge_enabled: false, ui_badge_text: "", ui_badge_color: "cyan", ui_default_model: false,
+  extra_params: "{}",
+});
+
+const BADGE_COLOR_OPTIONS = [
+  { value: "green", label: "缁胯壊" },
+  { value: "red", label: "绾㈣壊" },
+  { value: "orange", label: "姗欒壊" },
+  { value: "cyan", label: "闈掕壊" },
+  { value: "purple", label: "绱壊" },
+  { value: "gray", label: "鐏拌壊" },
+];
+
+const maskKey = (k: string | null) => {
+  if (!k) return "";
+  if (k.length <= 8) return "鈥?.repeat(k.length);
+  return `${k.slice(0, 4)}鈥⑩€⑩€⑩€?{k.slice(-4)}`;
+};
+
+export function ModelsPanel() {
+  const list = useServerFn(adminListModelsConfig);
+  const update = useServerFn(adminUpdateModel);
+  const create = useServerFn(adminCreateModel);
+  const del = useServerFn(adminDeleteModel);
+  const testFn = useServerFn(adminTestModel);
+  const [rows, setRows] = useState<ModelCfg[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [editing, setEditing] = useState<EditState | null>(null);
+  const [creating, setCreating] = useState<EditState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [testingKey, setTestingKey] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<
+    | { modelName: string; ok: boolean; stage: string; message: string; elapsedMs: number; imageUrl: string | null }
+    | null
+  >(null);
+
+  const load = async () => {
+    setLoading(true);
+    try { setRows(((await list({})) ?? []) as ModelCfg[]); }
+    catch (e: any) { toast.error(e.message); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const openEdit = (r: ModelCfg) => {
+    const extra = r.extra_params ?? {};
+    setEditing({
+      id: r.id, name: r.name, model_key: r.model_key,
+      description: r.description ?? "", cost: String(r.cost),
+      api_url: r.api_url ?? "", api_key: r.api_key ?? "",
+      request_format: (r.request_format ?? "async_id") as "async_id" | "sync_url",
+      prompt_key: r.prompt_key ?? "prompt",
+      fetch_url: r.fetch_url ?? "",
+      ui_badge_enabled: extra.ui_badge_enabled === true,
+      ui_badge_text: typeof extra.ui_badge_text === "string" ? extra.ui_badge_text : "",
+      ui_badge_color: typeof extra.ui_badge_color === "string" ? extra.ui_badge_color : "cyan",
+      ui_default_model: extra.ui_default_model === true,
+      extra_params: JSON.stringify(extra, null, 2),
+    });
+  };
+
+  const parseExtra = (s: string): Record<string, unknown> | null => {
+    const t = s.trim();
+    if (!t) return {};
+    try {
+      const v = JSON.parse(t);
+      if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+      return v as Record<string, unknown>;
+    } catch { return null; }
+  };
+
+  const mergeUiExtra = (extra: Record<string, unknown>, state: EditState): Record<string, unknown> => ({
+    ...extra,
+    ui_badge_enabled: state.ui_badge_enabled,
+    ui_badge_text: state.ui_badge_text.trim(),
+    ui_badge_color: state.ui_badge_color,
+    ui_default_model: state.ui_default_model,
+  });
+
+  const save = async () => {
+    if (!editing) return;
+    const n = Number(editing.cost);
+    if (!editing.name.trim() || !editing.model_key.trim()) return toast.error("鍚嶇О鍜?Key 涓嶈兘涓虹┖");
+    if (!Number.isFinite(n) || n < 0) return toast.error("璇疯緭鍏ユ湁鏁堢殑鐐规暟");
+    if (editing.api_url && !/^https?:\/\//i.test(editing.api_url)) return toast.error("API 鎺ュ彛鍦板潃蹇呴』鏄?http(s) URL");
+    const extra = parseExtra(editing.extra_params);
+    if (extra === null) return toast.error("棰濆璇锋眰鍙傛暟蹇呴』鏄悎娉曠殑 JSON 瀵硅薄");
+    const nextExtra = mergeUiExtra(extra, editing);
+    setBusy(true);
+    try {
+      await update({ data: {
+        id: editing.id,
+        name: editing.name.trim(),
+        model_key: editing.model_key.trim(),
+        description: editing.description.trim() || null,
+        cost: n,
+        api_url: editing.api_url.trim() || null,
+        api_key: editing.api_key.trim() || null,
+        request_format: editing.request_format,
+        prompt_key: editing.prompt_key.trim() || "prompt",
+        fetch_url: editing.fetch_url.trim() || null,
+        extra_params: nextExtra,
+      }});
+      toast.success("妯″瀷宸叉洿鏂?);
+      setEditing(null);
+      load();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const submitCreate = async () => {
+    if (!creating) return;
+    const n = Number(creating.cost);
+    if (!creating.name.trim() || !creating.model_key.trim()) return toast.error("鍚嶇О鍜?Key 涓嶈兘涓虹┖");
+    if (!Number.isFinite(n) || n < 0) return toast.error("璇疯緭鍏ユ湁鏁堢殑鐐规暟");
+    if (creating.api_url && !/^https?:\/\//i.test(creating.api_url)) return toast.error("API 鎺ュ彛鍦板潃蹇呴』鏄?http(s) URL");
+    const extra = parseExtra(creating.extra_params);
+    if (extra === null) return toast.error("棰濆璇锋眰鍙傛暟蹇呴』鏄悎娉曠殑 JSON 瀵硅薄");
+    const nextExtra = mergeUiExtra(extra, creating);
+    setBusy(true);
+    try {
+      await create({ data: {
+        name: creating.name.trim(),
+        model_key: creating.model_key.trim(),
+        description: creating.description.trim() || undefined,
+        cost: n,
+        api_url: creating.api_url.trim() || undefined,
+        api_key: creating.api_key.trim() || undefined,
+        request_format: creating.request_format,
+        prompt_key: creating.prompt_key.trim() || "prompt",
+        fetch_url: creating.fetch_url.trim() || undefined,
+        extra_params: nextExtra,
+      }});
+      toast.success("妯″瀷娣诲姞鎴愬姛");
+      setCreating(null);
+      load();
+    } catch (e: any) { toast.error(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const handleDelete = async (r: ModelCfg) => {
+    setRows(prev => prev.filter(x => x.id !== r.id));
+    try {
+      await del({ data: { id: r.id } });
+      toast.success("妯″瀷宸插垹闄?);
+    } catch (e: any) { toast.error(e.message); load(); }
+  };
+
+  const toggleEnabled = async (r: ModelCfg, next: boolean) => {
+    setRows(prev => prev.map(x => x.id === r.id ? { ...x, is_enabled: next } : x));
+    try {
+      await update({ data: { id: r.id, is_enabled: next } });
+      toast.success(next ? `宸插惎鐢ㄣ€?{r.name}銆峘 : `宸插仠鐢ㄣ€?{r.name}銆峘);
+    } catch (e: any) {
+      toast.error(e.message);
+      setRows(prev => prev.map(x => x.id === r.id ? { ...x, is_enabled: !next } : x));
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <GlobalConfigCard />
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">姣忎釜妯″瀷鍙厤缃嫭绔嬬殑 API 鎺ュ彛鍦板潃銆佸瘑閽ヤ笌鎵ｇ偣璐圭巼锛堢暀绌哄垯浣跨敤鍏ㄥ眬 API Key锛?/p>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={() => setCreating(empty())} className="bg-gradient-aurora text-primary-foreground">
+            <Plus className="mr-1.5 h-3.5 w-3.5" />娣诲姞妯″瀷
+          </Button>
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />鍒锋柊
+          </Button>
+        </div>
+      </div>
+      <div className="max-h-[60vh] overflow-auto rounded-lg border border-border/60">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>妯″瀷</TableHead>
+              <TableHead>Key</TableHead>
+              <TableHead>妯″紡</TableHead>
+              <TableHead>API 鎺ュ彛鍦板潃</TableHead>
+              <TableHead>API Key</TableHead>
+              <TableHead className="text-right">璐圭巼</TableHead>
+              <TableHead className="text-center">鍚敤</TableHead>
+              <TableHead className="text-right">鎿嶄綔</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map(r => (
+              <TableRow key={r.id}>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-white/5 text-primary">
+                      <Sparkles className="h-3.5 w-3.5" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium">{r.name}</div>
+                      {r.description && <div className="text-[10px] text-muted-foreground">{r.description}</div>}
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell className="font-mono text-[11px] text-muted-foreground">{r.model_key}</TableCell>
+                <TableCell>
+                  <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
+                    r.request_format === "sync_url"
+                      ? "bg-emerald-500/10 text-emerald-400"
+                      : "bg-primary/10 text-primary"
+                  }`}>
+                    {r.request_format === "sync_url" ? "鍚屾鐩村嚭" : "寮傛杞"}
+                  </span>
+                </TableCell>
+                <TableCell className="max-w-[240px] truncate font-mono text-[11px] text-muted-foreground" title={r.api_url ?? ""}>
+                  {r.api_url ? (
+                    <span className="inline-flex items-center gap-1"><LinkIcon className="h-3 w-3 text-primary/80" />{r.api_url}</span>
+                  ) : <span className="text-destructive/80">鏈厤缃?/span>}
+                </TableCell>
+                <TableCell className="font-mono text-[11px] text-muted-foreground">
+                  {r.api_key ? (
+                    <span className="inline-flex items-center gap-1"><KeyRound className="h-3 w-3 text-primary/80" />{maskKey(r.api_key)}</span>
+                  ) : <span className="text-muted-foreground/60">鈥?/span>}
+                </TableCell>
+                <TableCell className="text-right font-mono tabular-nums text-primary">{Number(r.cost)} 鐐?/TableCell>
+                <TableCell className="text-center">
+                  <div className="flex items-center justify-center gap-2">
+                    <Switch
+                      checked={r.is_enabled !== false}
+                      onCheckedChange={(v) => toggleEnabled(r, v)}
+                    />
+                    <span className={`text-[10px] ${r.is_enabled !== false ? "text-emerald-400" : "text-muted-foreground"}`}>
+                      {r.is_enabled !== false ? "鍚敤" : "鍋滅敤"}
+                    </span>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={testingKey === r.model_key}
+                      onClick={async () => {
+                        setTestingKey(r.model_key);
+                        setTestResult(null);
+                        try {
+                          const res = await testFn({ data: { modelKey: r.model_key } });
+                          setTestResult({ modelName: r.name, ...res });
+                          if (res.ok) toast.success(`銆?{r.name}銆嶆祴璇曢€氳繃 路 ${(res.elapsedMs / 1000).toFixed(1)}s`);
+                          else toast.error(`銆?{r.name}銆嶆祴璇曞け璐ワ細${res.message}`);
+                        } catch (e: any) {
+                          setTestResult({ modelName: r.name, ok: false, stage: "exception", message: e.message ?? "璋冪敤澶辫触", elapsedMs: 0, imageUrl: null });
+                          toast.error(e.message ?? "娴嬭瘯璋冪敤澶辫触");
+                        } finally {
+                          setTestingKey(null);
+                        }
+                      }}
+                    >
+                      {testingKey === r.model_key
+                        ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                        : <FlaskConical className="mr-1 h-3.5 w-3.5" />}
+                      娴嬭瘯
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>
+                      <Pencil className="mr-1 h-3.5 w-3.5" />淇敼
+                    </Button>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" className="w-64 border-border/70 bg-card/90 backdrop-blur-xl">
+                        <p className="text-xs text-foreground">纭畾瑕佸垹闄よ妯″瀷鍚楋紵</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">鍒犻櫎鍚庣敤鎴峰皢鏃犳硶閫夋嫨璇ユā鍨嬬敓鎴愬浘鐗囥€?/p>
+                        <div className="mt-3 flex justify-end">
+                          <Button size="sm" variant="destructive" onClick={() => handleDelete(r)}>纭鍒犻櫎</Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+            {rows.length === 0 && !loading && (
+              <TableRow><TableCell colSpan={8} className="text-center text-xs text-muted-foreground">鏆傛棤妯″瀷</TableCell></TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <ModelFormDialog
+        title={editing ? `淇敼妯″瀷 路 ${editing.name}` : ""}
+        state={editing} setState={setEditing} onSubmit={save} busy={busy}
+      />
+      <ModelFormDialog
+        title="娣诲姞鏂版ā鍨?
+        state={creating} setState={setCreating} onSubmit={submitCreate} busy={busy}
+      />
+
+      <Dialog open={!!testResult} onOpenChange={(v) => !v && setTestResult(null)}>
+        <DialogContent className="max-w-md border-border/70 bg-card/80 backdrop-blur-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {testResult?.ok
+                ? <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                : <XCircle className="h-4 w-4 text-destructive" />}
+              娴嬭瘯缁撴灉 路 {testResult?.modelName}
+            </DialogTitle>
+          </DialogHeader>
+          {testResult && (
+            <div className="space-y-3 pt-1 text-xs">
+              <div className="flex items-center gap-2">
+                <span className={`rounded-full px-2 py-0.5 text-[10px] ${testResult.ok ? "bg-emerald-500/15 text-emerald-400" : "bg-destructive/15 text-destructive"}`}>
+                  {testResult.ok ? "閫氳繃" : "澶辫触"}
+                </span>
+                <span className="text-muted-foreground">闃舵锛歿testResult.stage}</span>
+                <span className="text-muted-foreground">鑰楁椂 {(testResult.elapsedMs / 1000).toFixed(1)}s</span>
+              </div>
+              <p className="break-words text-foreground/90">{testResult.message}</p>
+              {testResult.imageUrl && (
+                <div className="overflow-hidden rounded-md border border-border/60">
+                  <img src={testResult.imageUrl} alt="娴嬭瘯杈撳嚭" className="block w-full" />
+                </div>
+              )}
+              {!testResult.ok && (
+                <p className="text-[11px] text-muted-foreground">
+                  鎻愮ず锛氬父瑙佸師鍥犲寘鎷?API 鎺ュ彛鍦板潃閿欒銆並ey 鏃犳潈闄愭垨棰濆害涓嶈冻銆乪xtra_params 涓庝笂娓稿绾︿笉涓€鑷淬€?
+                </p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function ModelFormDialog({
+  title, state, setState, onSubmit, busy,
+}: {
+  title: string;
+  state: EditState | null;
+  setState: (s: EditState | null) => void;
+  onSubmit: () => void;
+  busy: boolean;
+}) {
+  return (
+    <Dialog open={!!state} onOpenChange={(v) => !v && setState(null)}>
+      <DialogContent className="flex max-h-[90vh] max-w-md flex-col overflow-hidden border-border/70 bg-card/80 backdrop-blur-2xl">
+        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
+        {state && (
+          <>
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <div className="space-y-3 pb-4 pt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] text-muted-foreground">鏄剧ず鍚嶇О</label>
+                <Input value={state.name} onChange={(e) => setState({ ...state, name: e.target.value })} placeholder="GPT-Image-2" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] text-muted-foreground">Model Key</label>
+                <Input value={state.model_key} onChange={(e) => setState({ ...state, model_key: e.target.value })} placeholder="gpt-image-2" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] text-muted-foreground">鎻忚堪锛堥€夊～锛?/label>
+              <Input value={state.description} onChange={(e) => setState({ ...state, description: e.target.value })} placeholder="OpenAI 路 鏂颁竴浠ｅ浘鍍忕敓鎴? />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] text-muted-foreground inline-flex items-center gap-1"><LinkIcon className="h-3 w-3" />API 鎺ュ彛鍦板潃锛堣妯″瀷涓撳睘锛?/label>
+              <Input value={state.api_url} onChange={(e) => setState({ ...state, api_url: e.target.value })} placeholder="https://api.example.com/v1/images/generations" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] text-muted-foreground inline-flex items-center gap-1"><KeyRound className="h-3 w-3" />API Key锛圔earer Token锛?/label>
+              <Input value={state.api_key} onChange={(e) => setState({ ...state, api_key: e.target.value })} placeholder="请输入模型 API Key" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] text-muted-foreground">鍗曟鍑哄浘娑堣€楃偣鏁?/label>
+              <Input type="number" min={0} step="0.1" value={state.cost} onChange={(e) => setState({ ...state, cost: e.target.value })} placeholder="2" />
+            </div>
+
+            <div className="border-t border-border/40 pt-3">
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">鍓嶅彴灞曠ず</div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="flex items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={state.ui_badge_enabled}
+                    onChange={(e) => setState({ ...state, ui_badge_enabled: e.target.checked })}
+                    className="h-3.5 w-3.5"
+                  />
+                  鏄剧ず妯″瀷鏍囩
+                </label>
+                <label className="flex items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={state.ui_default_model}
+                    onChange={(e) => setState({ ...state, ui_default_model: e.target.checked })}
+                    className="h-3.5 w-3.5"
+                  />
+                  鍓嶅彴榛樿妯″瀷
+                </label>
+              </div>
+              <div className="mt-3 space-y-1">
+                <label className="text-[11px] text-muted-foreground">妯″瀷鏍囩鏂囧瓧</label>
+                <Input
+                  value={state.ui_badge_text}
+                  onChange={(e) => setState({ ...state, ui_badge_text: e.target.value })}
+                  placeholder="鎺ㄨ崘 / 鐑棬 / 鏈€寮?/ 鏈€鏂?/ 澶囩敤"
+                />
+              </div>
+              <div className="mt-3 space-y-1">
+                <label className="text-[11px] text-muted-foreground">鏍囩棰滆壊</label>
+                <select
+                  value={state.ui_badge_color}
+                  onChange={(e) => setState({ ...state, ui_badge_color: e.target.value })}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                >
+                  {BADGE_COLOR_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="border-t border-border/40 pt-3">
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">鍔ㄦ€佹帴鍙ｉ€傞厤</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] text-muted-foreground">杩斿洖鏍煎紡</label>
+                  <select
+                    value={state.request_format}
+                    onChange={(e) => setState({ ...state, request_format: e.target.value as "async_id" | "sync_url" })}
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                  >
+                    <option value="async_id">寮傛杞锛堣繑鍥炰换鍔D锛?/option>
+                    <option value="sync_url">鍚屾鐩村嚭锛堢洿鎺ヨ繑鍥濽RL锛?/option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] text-muted-foreground">鎻愮ず璇嶅弬鏁板悕</label>
+                  <Input value={state.prompt_key} onChange={(e) => setState({ ...state, prompt_key: e.target.value })} placeholder="prompt" />
+                </div>
+              </div>
+              {state.request_format === "async_id" && (
+                <div className="mt-3 space-y-1">
+                  <label className="text-[11px] text-muted-foreground">鏌ヨ缁撴灉鎺ュ彛锛堥€夊～锛岀暀绌哄皢鑷姩娲剧敓 /fetch_result锛?/label>
+                  <Input value={state.fetch_url} onChange={(e) => setState({ ...state, fetch_url: e.target.value })} placeholder="閫夊～锛岀暀绌哄皢鑷姩鐢熸垚 wuyinkeji 鐨勬煡璇㈠湴鍧€" />
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] text-muted-foreground">
+                棰濆璇锋眰鍙傛暟锛圝SON 瀵硅薄锛屾寜璇ユā鍨嬩笂娓?API 鏂囨。濉啓锛?
+              </label>
+              <textarea
+                value={state.extra_params}
+                onChange={(e) => setState({ ...state, extra_params: e.target.value })}
+                className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-[11px] shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                placeholder={`{\n  "size": "{{aspect}}",\n  "image_weight": 0.6,\n  "num_inference_steps": 30\n}`}
+                spellCheck={false}
+              />
+              <p className="text-[10px] text-muted-foreground/80">
+                杩欎簺鍙傛暟浼氫笌 prompt / urls 涓€璧峰悎骞惰繘涓婃父璇锋眰浣撱€傛敮鎸佸崰浣嶇锛?
+                <code className="mx-1 rounded bg-white/5 px-1">{"{{aspect}}"}</code>锛堟瘮渚嬪 1:1锛夈€?
+                <code className="mx-1 rounded bg-white/5 px-1">{"{{prompt}}"}</code>銆?
+                鐣欑┖鍒欎笉鍙戦€佷换浣曢澶栧瓧娈点€?
+              </p>
+            </div>
+
+          </div>
+          </div>
+          <div className="flex shrink-0 gap-2 border-t border-border/60 bg-card/95 pt-3">
+            <Button variant="outline" className="flex-1" onClick={() => setState(null)} disabled={busy}>鍙栨秷</Button>
+            <Button className="flex-1" onClick={onSubmit} disabled={busy}>淇濆瓨</Button>
+          </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function GlobalConfigCard() {
+  const getCfg = useServerFn(adminGetGlobalConfig);
+  const setCfg = useServerFn(adminUpdateGlobalConfig);
+  const [baseUrl, setBaseUrl] = useState("https://api.wuyinkeji.com");
+  const [apiKey, setApiKey] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const r = (await getCfg({})) as { base_url: string; global_api_key: string | null };
+        setBaseUrl(r.base_url || "https://api.wuyinkeji.com");
+        setApiKey(r.global_api_key ?? "");
+      } catch (e: any) { toast.error(e.message); }
+      finally { setLoading(false); }
+    })();
+  }, []);
+
+  const save = async () => {
+    if (!/^https?:\/\//i.test(baseUrl.trim())) return toast.error("璇峰～鍐欏悎娉曠殑 Base URL");
+    setSaving(true);
+    try {
+      await setCfg({ data: { base_url: baseUrl.trim(), global_api_key: apiKey.trim() || null } });
+      toast.success("鍏ㄥ眬鎺ュ彛閰嶇疆宸蹭繚瀛?);
+    } catch (e: any) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-white/[0.03] p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <Globe className="h-4 w-4 text-primary" />
+        <h3 className="text-sm font-medium">鍏ㄥ眬鎺ュ彛璁剧疆</h3>
+        <span className="text-[10px] text-muted-foreground">鎵€鏈夋ā鍨嬮粯璁や娇鐢ㄦ Base URL 涓?API Key</span>
+      </div>
+      <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">涓婃父鎬诲煙鍚?(Base URL)</label>
+          <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.wuyinkeji.com" disabled={loading} />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">鍏ㄥ眬涓浆 API Key</label>
+          <Input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="请输入模型 API Key" type="password" disabled={loading} />
+        </div>
+        <div className="flex items-end">
+          <Button onClick={save} disabled={saving || loading} className="bg-gradient-aurora text-primary-foreground">
+            <Save className="mr-1.5 h-3.5 w-3.5" />淇濆瓨
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

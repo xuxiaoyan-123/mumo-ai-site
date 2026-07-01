@@ -1,0 +1,19 @@
+﻿{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mumo-ai-site",
+  "compatibility_date": "2025-09-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": ".output/server/index.mjs",
+  "assets": {
+    "directory": ".output/public"
+  },
+  "vars": {
+    "R2_PUBLIC_BASE_URL": "https://your-mumo-r2-public-domain.example"
+  },
+  "r2_buckets": [
+    {
+      "binding": "MUMO_GENERATED_IMAGES",
+      "bucket_name": "mumo-ai-generated-images"
+    }
+  ]
+}
