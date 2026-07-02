@@ -28,7 +28,6 @@ type RechargePackage = {
   isVisible: boolean;
   sortOrder: number;
   buttonText: string;
-  purchaseUrl: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -46,7 +45,6 @@ type EditState = {
   isVisible: boolean;
   sortOrder: string;
   buttonText: string;
-  purchaseUrl: string;
 };
 
 const emptyPackage = (): EditState => ({
@@ -61,7 +59,6 @@ const emptyPackage = (): EditState => ({
   isVisible: true,
   sortOrder: "0",
   buttonText: "立即购买",
-  purchaseUrl: "",
 });
 
 const toEditState = (pkg: RechargePackage): EditState => ({
@@ -77,7 +74,6 @@ const toEditState = (pkg: RechargePackage): EditState => ({
   isVisible: pkg.isVisible,
   sortOrder: String(pkg.sortOrder ?? 0),
   buttonText: pkg.buttonText || "立即购买",
-  purchaseUrl: pkg.purchaseUrl ?? "",
 });
 
 function parseLines(value: string) {
@@ -132,15 +128,11 @@ export function RechargePackagesPanel() {
     const price = editing.price.trim();
     const credits = Number(editing.credits);
     const sortOrder = Number(editing.sortOrder);
-    const purchaseUrl = editing.purchaseUrl.trim();
 
     if (!title) return toast.error("套餐名称不能为空");
     if (!price) return toast.error("价格不能为空");
     if (!Number.isInteger(credits) || credits < 0) return toast.error("积分数量必须是非负整数");
     if (!Number.isInteger(sortOrder)) return toast.error("排序必须是整数");
-    if (purchaseUrl && !/^https?:\/\//i.test(purchaseUrl)) {
-      return toast.error("购买链接必须以 http:// 或 https:// 开头");
-    }
 
     setSaving(true);
     try {
@@ -158,7 +150,6 @@ export function RechargePackagesPanel() {
           isVisible: editing.isVisible,
           sortOrder,
           buttonText: editing.buttonText.trim() || "立即购买",
-          purchaseUrl,
         },
       });
       toast.success("充值套餐已保存");
@@ -230,7 +221,6 @@ export function RechargePackagesPanel() {
               <TableHead className="text-right">积分</TableHead>
               <TableHead>标签</TableHead>
               <TableHead>显示</TableHead>
-              <TableHead>购买链接</TableHead>
               <TableHead className="text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
@@ -255,9 +245,6 @@ export function RechargePackagesPanel() {
                   <span className={pkg.isVisible ? "text-xs text-emerald-400" : "text-xs text-muted-foreground"}>
                     {pkg.isVisible ? "显示" : "隐藏"}
                   </span>
-                </TableCell>
-                <TableCell className="max-w-[220px] truncate font-mono text-[11px] text-muted-foreground">
-                  {pkg.purchaseUrl || "-"}
                 </TableCell>
                 <TableCell className="text-right">
                   <Button variant="ghost" size="sm" onClick={() => setEditing(toEditState(pkg))}>
@@ -324,9 +311,6 @@ export function RechargePackagesPanel() {
               </Field>
               <Field label="排序">
                 <Input type="number" value={editing.sortOrder} onChange={(e) => setEditing({ ...editing, sortOrder: e.target.value })} />
-              </Field>
-              <Field label="购买链接">
-                <Input value={editing.purchaseUrl} onChange={(e) => setEditing({ ...editing, purchaseUrl: e.target.value })} placeholder="https://..." />
               </Field>
               <div className="grid gap-3 rounded-lg border border-border/60 bg-white/[0.03] p-3 sm:col-span-2 sm:grid-cols-3">
                 <ToggleRow label="最受欢迎" checked={editing.isPopular} onCheckedChange={(v) => setEditing({ ...editing, isPopular: v })} />

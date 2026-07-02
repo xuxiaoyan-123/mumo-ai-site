@@ -16,11 +16,9 @@ type Plan = {
   subtitle: string;
   credits: number;
   features: string[];
-  purchaseUrl: string;
   highlighted?: boolean;
   isPopular?: boolean;
   badgeText?: string;
-  buttonText: string;
   icon?: React.ReactNode;
 };
 
@@ -32,8 +30,6 @@ const PLANS: Plan[] = [
     subtitle: "适合偶尔体验的尝鲜用户",
     credits: 1000,
     features: ["1,000 积分", "基础图像模型", "标准排队速度"],
-    purchaseUrl: "https://www.kufaka.com/item/dhmljk",
-    buttonText: "立即购买",
   },
   {
     id: "starter",
@@ -42,8 +38,6 @@ const PLANS: Plan[] = [
     subtitle: "轻量级创作者的首选",
     credits: 3000,
     features: ["3,000 积分", "所有基础模型", "标准排队速度"],
-    purchaseUrl: "https://www.kufaka.com/item/661nyd",
-    buttonText: "立即购买",
   },
   {
     id: "core",
@@ -56,8 +50,6 @@ const PLANS: Plan[] = [
     isPopular: true,
     badgeText: "最受欢迎",
     icon: <Zap className="h-4 w-4" />,
-    purchaseUrl: "https://www.kufaka.com/item/2tig9e",
-    buttonText: "立即购买",
   },
   {
     id: "pro",
@@ -66,8 +58,6 @@ const PLANS: Plan[] = [
     subtitle: "为高频重度使用者打造",
     credits: 13000,
     features: ["13,000 积分", "全模型无限制访问", "极速极享队列", "专属客服支持"],
-    purchaseUrl: "https://www.kufaka.com/item/fk4jmd",
-    buttonText: "立即购买",
   },
   {
     id: "premium",
@@ -77,8 +67,6 @@ const PLANS: Plan[] = [
     credits: 20000,
     features: ["20,000 积分", "最高优先级算力", "支持 API 批量调用", "客服24小时在线服务"],
     icon: <Crown className="h-4 w-4" />,
-    purchaseUrl: "https://www.kufaka.com/item/9a7qf1",
-    buttonText: "立即购买",
   },
 ];
 
@@ -92,8 +80,6 @@ type RechargePackageRow = {
   badgeText?: string;
   isPopular?: boolean;
   highlighted?: boolean;
-  buttonText?: string;
-  purchaseUrl?: string;
 };
 
 function toPlan(row: RechargePackageRow): Plan {
@@ -107,8 +93,6 @@ function toPlan(row: RechargePackageRow): Plan {
     badgeText: row.badgeText ?? "",
     isPopular: Boolean(row.isPopular),
     highlighted: Boolean(row.highlighted),
-    buttonText: row.buttonText || "立即购买",
-    purchaseUrl: row.purchaseUrl ?? "",
   };
 }
 
@@ -147,15 +131,6 @@ export function RedeemDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     return () => clearTimeout(t);
   }, [cooldown]);
 
-  const handlePurchase = (_planId: string, url?: string) => {
-    if (url && /^https?:\/\//i.test(url)) {
-      window.open(url, "_blank", "noopener,noreferrer");
-    } else {
-      toast.info("暂未配置购买链接");
-    }
-  };
-
-
   const submit = async () => {
     if (!code.trim() || loading || cooldown > 0) return;
     setLoading(true);
@@ -189,7 +164,7 @@ export function RedeemDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         {/* 价格套餐卡片区 */}
         <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2 md:gap-4 lg:grid-cols-5">
           {plans.map((p) => (
-            <PlanCard key={p.id} plan={p} onBuy={handlePurchase} />
+              <PlanCard key={p.id} plan={p} />
           ))}
         </div>
 
@@ -226,14 +201,7 @@ export function RedeemDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           </div>
           <p className="mt-3 text-xs text-zinc-400">
             还没有兑换码？
-            <a
-              href="https://www.kufaka.com/shop/ATG0OHM3"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ml-1 font-medium text-emerald-400 underline-offset-2 hover:text-emerald-300 hover:underline"
-            >
-              点击这里前往官方商城购买
-            </a>
+            <span className="ml-1 font-medium text-zinc-300">支付功能暂未开放</span>
           </p>
         </div>
 
@@ -242,7 +210,7 @@ export function RedeemDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   );
 }
 
-function PlanCard({ plan, onBuy }: { plan: Plan; onBuy: (id: string, url?: string) => void }) {
+function PlanCard({ plan }: { plan: Plan }) {
   const highlight = plan.highlighted || plan.isPopular;
   return (
     <div
@@ -311,15 +279,10 @@ function PlanCard({ plan, onBuy }: { plan: Plan; onBuy: (id: string, url?: strin
       </ul>
 
       <Button
-        onClick={() => onBuy(plan.id, plan.purchaseUrl)}
-        className={cn(
-          "relative mt-5 w-full font-semibold",
-          highlight
-            ? "bg-emerald-500 text-white shadow-[0_0_18px_rgba(16,185,129,0.45)] hover:bg-emerald-400"
-            : "border border-zinc-700 bg-zinc-800/60 text-zinc-100 shadow-none hover:border-emerald-500/60 hover:bg-zinc-800",
-        )}
+        disabled
+        className="relative mt-5 w-full cursor-not-allowed border border-zinc-700 bg-zinc-800/60 font-semibold text-zinc-400 opacity-70 shadow-none"
       >
-        {plan.purchaseUrl ? plan.buttonText : "暂未配置购买链接"}
+        支付功能暂未开放
       </Button>
     </div>
   );

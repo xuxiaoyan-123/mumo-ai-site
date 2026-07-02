@@ -13,6 +13,14 @@ import { Route as InspirationRouteImport } from './routes/inspiration'
 import { Route as DisclaimerRouteImport } from './routes/disclaimer'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiDownloadImageRouteImport } from './routes/api/download-image'
+import { Route as ApiUploadsInputImageRouteImport } from './routes/api/uploads/input-image'
+import { Route as ApiUploadsAvatarRouteImport } from './routes/api/uploads/avatar'
+import { Route as ApiPublicContactRouteImport } from './routes/api/public/contact'
+import { Route as ApiAuthRequestPasswordResetRouteImport } from './routes/api/auth/request-password-reset'
+import { Route as ApiAuthRegisterRouteImport } from './routes/api/auth/register'
+import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
+import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
+import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
 
 const InspirationRoute = InspirationRouteImport.update({
   id: '/inspiration',
@@ -34,18 +42,75 @@ const ApiDownloadImageRoute = ApiDownloadImageRouteImport.update({
   path: '/api/download-image',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiUploadsInputImageRoute = ApiUploadsInputImageRouteImport.update({
+  id: '/api/uploads/input-image',
+  path: '/api/uploads/input-image',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUploadsAvatarRoute = ApiUploadsAvatarRouteImport.update({
+  id: '/api/uploads/avatar',
+  path: '/api/uploads/avatar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicContactRoute = ApiPublicContactRouteImport.update({
+  id: '/api/public/contact',
+  path: '/api/public/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthRequestPasswordResetRoute =
+  ApiAuthRequestPasswordResetRouteImport.update({
+    id: '/api/auth/request-password-reset',
+    path: '/api/auth/request-password-reset',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiAuthRegisterRoute = ApiAuthRegisterRouteImport.update({
+  id: '/api/auth/register',
+  path: '/api/auth/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthMeRoute = ApiAuthMeRouteImport.update({
+  id: '/api/auth/me',
+  path: '/api/auth/me',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthLogoutRoute = ApiAuthLogoutRouteImport.update({
+  id: '/api/auth/logout',
+  path: '/api/auth/logout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
+  id: '/api/auth/login',
+  path: '/api/auth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/disclaimer': typeof DisclaimerRoute
   '/inspiration': typeof InspirationRoute
   '/api/download-image': typeof ApiDownloadImageRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/me': typeof ApiAuthMeRoute
+  '/api/auth/register': typeof ApiAuthRegisterRoute
+  '/api/auth/request-password-reset': typeof ApiAuthRequestPasswordResetRoute
+  '/api/public/contact': typeof ApiPublicContactRoute
+  '/api/uploads/avatar': typeof ApiUploadsAvatarRoute
+  '/api/uploads/input-image': typeof ApiUploadsInputImageRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/disclaimer': typeof DisclaimerRoute
   '/inspiration': typeof InspirationRoute
   '/api/download-image': typeof ApiDownloadImageRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/me': typeof ApiAuthMeRoute
+  '/api/auth/register': typeof ApiAuthRegisterRoute
+  '/api/auth/request-password-reset': typeof ApiAuthRequestPasswordResetRoute
+  '/api/public/contact': typeof ApiPublicContactRoute
+  '/api/uploads/avatar': typeof ApiUploadsAvatarRoute
+  '/api/uploads/input-image': typeof ApiUploadsInputImageRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +118,58 @@ export interface FileRoutesById {
   '/disclaimer': typeof DisclaimerRoute
   '/inspiration': typeof InspirationRoute
   '/api/download-image': typeof ApiDownloadImageRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/me': typeof ApiAuthMeRoute
+  '/api/auth/register': typeof ApiAuthRegisterRoute
+  '/api/auth/request-password-reset': typeof ApiAuthRequestPasswordResetRoute
+  '/api/public/contact': typeof ApiPublicContactRoute
+  '/api/uploads/avatar': typeof ApiUploadsAvatarRoute
+  '/api/uploads/input-image': typeof ApiUploadsInputImageRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/disclaimer' | '/inspiration' | '/api/download-image'
+  fullPaths:
+    | '/'
+    | '/disclaimer'
+    | '/inspiration'
+    | '/api/download-image'
+    | '/api/auth/login'
+    | '/api/auth/logout'
+    | '/api/auth/me'
+    | '/api/auth/register'
+    | '/api/auth/request-password-reset'
+    | '/api/public/contact'
+    | '/api/uploads/avatar'
+    | '/api/uploads/input-image'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/disclaimer' | '/inspiration' | '/api/download-image'
-  id: '__root__' | '/' | '/disclaimer' | '/inspiration' | '/api/download-image'
+  to:
+    | '/'
+    | '/disclaimer'
+    | '/inspiration'
+    | '/api/download-image'
+    | '/api/auth/login'
+    | '/api/auth/logout'
+    | '/api/auth/me'
+    | '/api/auth/register'
+    | '/api/auth/request-password-reset'
+    | '/api/public/contact'
+    | '/api/uploads/avatar'
+    | '/api/uploads/input-image'
+  id:
+    | '__root__'
+    | '/'
+    | '/disclaimer'
+    | '/inspiration'
+    | '/api/download-image'
+    | '/api/auth/login'
+    | '/api/auth/logout'
+    | '/api/auth/me'
+    | '/api/auth/register'
+    | '/api/auth/request-password-reset'
+    | '/api/public/contact'
+    | '/api/uploads/avatar'
+    | '/api/uploads/input-image'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +177,14 @@ export interface RootRouteChildren {
   DisclaimerRoute: typeof DisclaimerRoute
   InspirationRoute: typeof InspirationRoute
   ApiDownloadImageRoute: typeof ApiDownloadImageRoute
+  ApiAuthLoginRoute: typeof ApiAuthLoginRoute
+  ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
+  ApiAuthMeRoute: typeof ApiAuthMeRoute
+  ApiAuthRegisterRoute: typeof ApiAuthRegisterRoute
+  ApiAuthRequestPasswordResetRoute: typeof ApiAuthRequestPasswordResetRoute
+  ApiPublicContactRoute: typeof ApiPublicContactRoute
+  ApiUploadsAvatarRoute: typeof ApiUploadsAvatarRoute
+  ApiUploadsInputImageRoute: typeof ApiUploadsInputImageRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +217,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDownloadImageRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/uploads/input-image': {
+      id: '/api/uploads/input-image'
+      path: '/api/uploads/input-image'
+      fullPath: '/api/uploads/input-image'
+      preLoaderRoute: typeof ApiUploadsInputImageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/uploads/avatar': {
+      id: '/api/uploads/avatar'
+      path: '/api/uploads/avatar'
+      fullPath: '/api/uploads/avatar'
+      preLoaderRoute: typeof ApiUploadsAvatarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/contact': {
+      id: '/api/public/contact'
+      path: '/api/public/contact'
+      fullPath: '/api/public/contact'
+      preLoaderRoute: typeof ApiPublicContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/request-password-reset': {
+      id: '/api/auth/request-password-reset'
+      path: '/api/auth/request-password-reset'
+      fullPath: '/api/auth/request-password-reset'
+      preLoaderRoute: typeof ApiAuthRequestPasswordResetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/register': {
+      id: '/api/auth/register'
+      path: '/api/auth/register'
+      fullPath: '/api/auth/register'
+      preLoaderRoute: typeof ApiAuthRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/me': {
+      id: '/api/auth/me'
+      path: '/api/auth/me'
+      fullPath: '/api/auth/me'
+      preLoaderRoute: typeof ApiAuthMeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/logout': {
+      id: '/api/auth/logout'
+      path: '/api/auth/logout'
+      fullPath: '/api/auth/logout'
+      preLoaderRoute: typeof ApiAuthLogoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/login': {
+      id: '/api/auth/login'
+      path: '/api/auth/login'
+      fullPath: '/api/auth/login'
+      preLoaderRoute: typeof ApiAuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +281,14 @@ const rootRouteChildren: RootRouteChildren = {
   DisclaimerRoute: DisclaimerRoute,
   InspirationRoute: InspirationRoute,
   ApiDownloadImageRoute: ApiDownloadImageRoute,
+  ApiAuthLoginRoute: ApiAuthLoginRoute,
+  ApiAuthLogoutRoute: ApiAuthLogoutRoute,
+  ApiAuthMeRoute: ApiAuthMeRoute,
+  ApiAuthRegisterRoute: ApiAuthRegisterRoute,
+  ApiAuthRequestPasswordResetRoute: ApiAuthRequestPasswordResetRoute,
+  ApiPublicContactRoute: ApiPublicContactRoute,
+  ApiUploadsAvatarRoute: ApiUploadsAvatarRoute,
+  ApiUploadsInputImageRoute: ApiUploadsInputImageRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
