@@ -15,5 +15,12 @@
       "binding": "MUMO_GENERATED_IMAGES",
       "bucket_name": "mumo-ai-generated-images"
     }
+  ],
+  "d1_databases": [
+    {
+      "binding": "MUMO_DB",
+      "database_name": "mumo_ai_db",
+      "database_id": "REPLACE_WITH_MUMO_D1_DATABASE_ID"
+    }
   ]
 }
