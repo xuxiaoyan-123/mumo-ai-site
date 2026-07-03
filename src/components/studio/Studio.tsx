@@ -116,6 +116,7 @@ export function Studio() {
   const [currentModel, setCurrentModel] = useState<string>("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [forceAuth, setForceAuth] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
   const [announcementsOpen, setAnnouncementsOpen] = useState(false);
   const [progress, setProgress] = useState<GenProgress | null>(null);
   const [adminTasks, setAdminTasks] = useState<FloatingTask[]>([]);
@@ -661,7 +662,7 @@ export function Studio() {
     }
   };
 
-  const showAuth = !loading && (!session || forceAuth);
+  const showAuth = !loading && ((!session && !previewMode) || forceAuth);
   const credits = profile?.credits ?? 0;
 
   return (
@@ -671,7 +672,10 @@ export function Studio() {
           credits={credits}
           onOpenHistory={() => setHistoryOpen(true)}
           onOpenAnnouncements={() => setAnnouncementsOpen(true)}
-          onSwitchAccount={() => setForceAuth(true)}
+          onSwitchAccount={() => {
+            setPreviewMode(false);
+            setForceAuth(true);
+          }}
         />
         <div className="relative grid grid-cols-1 pb-[calc(env(safe-area-inset-bottom)+10rem)] lg:min-h-0 lg:flex-1 lg:grid-cols-[390px_minmax(0,1fr)] lg:overflow-hidden lg:pb-0 xl:grid-cols-[430px_minmax(0,1fr)]">
           <ControlPanel
@@ -729,7 +733,7 @@ export function Studio() {
           />
         )}
       </div>
-      {!showAuth && (
+      {!showAuth && session && (
         <Suspense fallback={null}>
           <AnnouncementCenter
             open={announcementsOpen}
@@ -740,7 +744,16 @@ export function Studio() {
       )}
       {showAuth && (
         <Suspense fallback={null}>
-          <AuthModal onSuccess={() => setForceAuth(false)} />
+          <AuthModal
+            onSuccess={() => {
+              setPreviewMode(false);
+              setForceAuth(false);
+            }}
+            onPreview={() => {
+              setPreviewMode(true);
+              setForceAuth(false);
+            }}
+          />
         </Suspense>
       )}
     </div>
