@@ -673,7 +673,7 @@ export function Studio() {
           onOpenAnnouncements={() => setAnnouncementsOpen(true)}
           onSwitchAccount={() => setForceAuth(true)}
         />
-        <div className="grid grid-cols-1 pb-[calc(env(safe-area-inset-bottom)+10rem)] lg:min-h-0 lg:flex-1 lg:grid-cols-2 lg:overflow-hidden lg:pb-0">
+        <div className="relative grid grid-cols-1 pb-[calc(env(safe-area-inset-bottom)+10rem)] lg:min-h-0 lg:flex-1 lg:grid-cols-[390px_minmax(0,1fr)] lg:overflow-hidden lg:pb-0 xl:grid-cols-[430px_minmax(0,1fr)]">
           <ControlPanel
             onGenerateStart={handleGenerateStart}
             onGenerateDone={handleGenerateDone}

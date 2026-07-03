@@ -49,7 +49,7 @@ export function AnalyticsPanel() {
         <MetricCard icon={<Zap className="h-4 w-4" />} label="今日总消耗算力" value={(m?.todayCost ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} trend />
         <MetricCard icon={<Wallet className="h-4 w-4" />} label="今日上游成本" value="未记录" />
         <MetricCard icon={<Sparkles className="h-4 w-4" />} label="历史注册总用户" value={m?.totalUsers ?? 0} />
-        <MetricCard icon={<Ticket className="h-4 w-4" />} label="剩余有效卡密" value={m?.unusedCoupons ?? 0} />
+        <MetricCard icon={<Ticket className="h-4 w-4" />} label="剩余有效兑换码" value={m?.unusedCoupons ?? 0} />
       </div>
 
       {/* Model usage */}

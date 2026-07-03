@@ -73,8 +73,8 @@ export function AdminDashboard({ open, onOpenChange, isFounder = false }: { open
           <TabsList className="inline-flex w-max min-w-max flex-nowrap bg-white/[0.04]">
             <TabsTrigger value="analytics" className="shrink-0 whitespace-nowrap gap-1.5"><LayoutDashboard className="h-3.5 w-3.5" />数据仪表盘</TabsTrigger>
             <TabsTrigger value="users" className="shrink-0 whitespace-nowrap gap-1.5"><Users className="h-3.5 w-3.5" />用户管理</TabsTrigger>
-            <TabsTrigger value="coupons" className="shrink-0 whitespace-nowrap gap-1.5"><Ticket className="h-3.5 w-3.5" />卡密管理</TabsTrigger>
-            <TabsTrigger value="recharge" className="shrink-0 whitespace-nowrap gap-1.5"><ShoppingBag className="h-3.5 w-3.5" />充值套餐配置</TabsTrigger>
+            <TabsTrigger value="coupons" className="shrink-0 whitespace-nowrap gap-1.5"><Ticket className="h-3.5 w-3.5" />兑换码管理</TabsTrigger>
+            <TabsTrigger value="recharge" className="shrink-0 whitespace-nowrap gap-1.5"><ShoppingBag className="h-3.5 w-3.5" />权益配置</TabsTrigger>
             <TabsTrigger value="models" className="shrink-0 whitespace-nowrap gap-1.5"><Sparkles className="h-3.5 w-3.5" />模型点数价格控制</TabsTrigger>
             <TabsTrigger value="ads" className="shrink-0 whitespace-nowrap gap-1.5"><Megaphone className="h-3.5 w-3.5" />广告管理</TabsTrigger>
             <TabsTrigger value="announcements" className="shrink-0 whitespace-nowrap gap-1.5"><Bell className="h-3.5 w-3.5" />通知公告</TabsTrigger>
@@ -485,7 +485,7 @@ function CouponsPanel() {
     setBusy(true);
     try {
       const inserted = (await gen({ data: { count: c, amount: a } })) as { code: string; amount: number }[];
-      toast.success(`已生成 ${c} 张卡密`);
+      toast.success(`已生成 ${c} 个兑换码`);
       setJustGenerated(inserted ?? []);
       // Try to auto-copy immediately (works while user gesture context still active)
       try {
@@ -501,14 +501,14 @@ function CouponsPanel() {
   const copyAll = () => {
     const unused = coupons.filter(c => !c.is_used).map(c => c.code).join("\n");
     navigator.clipboard.writeText(unused);
-    toast.success("已复制全部未使用卡密");
+    toast.success("已复制全部未使用兑换码");
   };
 
   const copyJustGenerated = async () => {
     if (!justGenerated?.length) return;
     try {
       await navigator.clipboard.writeText(justGenerated.map(x => x.code).join("\n"));
-      toast.success(`已复制 ${justGenerated.length} 张卡密`);
+      toast.success(`已复制 ${justGenerated.length} 个兑换码`);
     } catch {
       toast.error("复制失败，请手动选择文本复制");
     }
@@ -537,7 +537,7 @@ function CouponsPanel() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>卡密</TableHead>
+              <TableHead>兑换码</TableHead>
               <TableHead className="text-right">面额</TableHead>
               <TableHead>状态</TableHead>
               <TableHead>使用者</TableHead>
@@ -574,7 +574,7 @@ function CouponsPanel() {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent align="end" className="w-64 border-border/70 bg-card/90 backdrop-blur-xl">
-                        <p className="text-xs text-foreground">确定要彻底删除该卡密吗？</p>
+                        <p className="text-xs text-foreground">确定要彻底删除该兑换码吗？</p>
                         <p className="mt-1 text-[11px] text-muted-foreground">删除后用户将无法兑换。</p>
                         <div className="mt-3 flex justify-end gap-2">
                           <Button
@@ -584,7 +584,7 @@ function CouponsPanel() {
                               setCoupons(prev => prev.filter(x => x.id !== c.id));
                               try {
                                 await del({ data: { couponId: c.id } });
-                                toast.success("卡密删除成功");
+                                toast.success("兑换码删除成功");
                               } catch (e: any) {
                                 toast.error(e.message);
                                 load();
@@ -609,7 +609,7 @@ function CouponsPanel() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Ticket className="h-4 w-4 text-primary" />
-              本次生成的卡密（{justGenerated?.length ?? 0} 张 · 每张 {justGenerated?.[0]?.amount ?? 0} 点）
+              本次生成的兑换码（{justGenerated?.length ?? 0} 个 · 每个 {justGenerated?.[0]?.amount ?? 0} 权益点）
             </DialogTitle>
           </DialogHeader>
           <textarea

@@ -58,7 +58,7 @@ const emptyPackage = (): EditState => ({
   highlighted: false,
   isVisible: true,
   sortOrder: "0",
-  buttonText: "立即购买",
+  buttonText: "兑换功能暂未开放",
 });
 
 const toEditState = (pkg: RechargePackage): EditState => ({
@@ -73,7 +73,7 @@ const toEditState = (pkg: RechargePackage): EditState => ({
   highlighted: pkg.highlighted,
   isVisible: pkg.isVisible,
   sortOrder: String(pkg.sortOrder ?? 0),
-  buttonText: pkg.buttonText || "立即购买",
+  buttonText: pkg.buttonText || "兑换功能暂未开放",
 });
 
 function parseLines(value: string) {
@@ -113,7 +113,7 @@ export function RechargePackagesPanel() {
         setSchemaMissing(true);
         setPackages([]);
       } else {
-        toast.error(e.message ?? "充值套餐加载失败");
+        toast.error(e.message ?? "权益配置加载失败");
       }
     } finally {
       setLoading(false);
@@ -129,7 +129,7 @@ export function RechargePackagesPanel() {
     const credits = Number(editing.credits);
     const sortOrder = Number(editing.sortOrder);
 
-    if (!title) return toast.error("套餐名称不能为空");
+    if (!title) return toast.error("权益包名称不能为空");
     if (!price) return toast.error("价格不能为空");
     if (!Number.isInteger(credits) || credits < 0) return toast.error("积分数量必须是非负整数");
     if (!Number.isInteger(sortOrder)) return toast.error("排序必须是整数");
@@ -149,10 +149,10 @@ export function RechargePackagesPanel() {
           highlighted: editing.highlighted,
           isVisible: editing.isVisible,
           sortOrder,
-          buttonText: editing.buttonText.trim() || "立即购买",
+          buttonText: editing.buttonText.trim() || "兑换功能暂未开放",
         },
       });
-      toast.success("充值套餐已保存");
+      toast.success("权益配置已保存");
       setEditing(null);
       load();
     } catch (e: any) {
@@ -163,10 +163,10 @@ export function RechargePackagesPanel() {
   };
 
   const hide = async (pkg: RechargePackage) => {
-    if (!confirm(`确认隐藏套餐"${pkg.title}"吗？隐藏后普通用户将看不到该套餐。`)) return;
+    if (!confirm(`确认隐藏权益包"${pkg.title}"吗？隐藏后普通用户将看不到该权益包。`)) return;
     try {
       await hideFn({ data: { id: pkg.id } });
-      toast.success("套餐已隐藏");
+      toast.success("权益包已隐藏");
       load();
     } catch (e: any) {
       toast.error(e.message ?? "隐藏失败");
@@ -174,10 +174,10 @@ export function RechargePackagesPanel() {
   };
 
   const remove = async (pkg: RechargePackage) => {
-    if (!confirm(`确认永久删除套餐“${pkg.title}”吗？此操作只删除套餐展示配置，不影响卡密和用户积分。`)) return;
+    if (!confirm(`确认永久删除权益包“${pkg.title}”吗？此操作只删除展示配置，不影响兑换码和用户权益点数。`)) return;
     try {
       await deleteFn({ data: { id: pkg.id } });
-      toast.success("套餐已删除");
+      toast.success("权益包已删除");
       load();
     } catch (e: any) {
       toast.error(e.message ?? "删除失败");
@@ -188,7 +188,7 @@ export function RechargePackagesPanel() {
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">
-          共 {packages.length} 个套餐，显示 {packages.filter((pkg) => pkg.isVisible).length} 个
+          共 {packages.length} 个权益包，显示 {packages.filter((pkg) => pkg.isVisible).length} 个
         </p>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -200,14 +200,14 @@ export function RechargePackagesPanel() {
             disabled={schemaMissing}
             onClick={() => setEditing(emptyPackage())}
           >
-            <Plus className="mr-1.5 h-3.5 w-3.5" />新增套餐
+            <Plus className="mr-1.5 h-3.5 w-3.5" />新增权益包
           </Button>
         </div>
       </div>
 
       {schemaMissing && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-          充值套餐表尚未创建，请先应用数据库迁移后再配置套餐。
+          权益配置暂不可用，请稍后再试或联系管理员。
         </div>
       )}
 
@@ -216,9 +216,9 @@ export function RechargePackagesPanel() {
           <TableHeader>
             <TableRow>
               <TableHead>排序</TableHead>
-              <TableHead>套餐</TableHead>
-              <TableHead>价格</TableHead>
-              <TableHead className="text-right">积分</TableHead>
+              <TableHead>权益包</TableHead>
+              <TableHead>展示信息</TableHead>
+              <TableHead className="text-right">权益点数</TableHead>
               <TableHead>标签</TableHead>
               <TableHead>显示</TableHead>
               <TableHead className="text-right">操作</TableHead>
@@ -273,7 +273,7 @@ export function RechargePackagesPanel() {
             {packages.length === 0 && (
               <TableRow>
                 <TableCell colSpan={8} className="py-8 text-center text-xs text-muted-foreground">
-                  暂无充值套餐
+                  暂无权益配置
                 </TableCell>
               </TableRow>
             )}
@@ -286,21 +286,21 @@ export function RechargePackagesPanel() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShoppingBag className="h-4 w-4 text-primary" />
-              {editing?.id ? "编辑充值套餐" : "新增充值套餐"}
+              {editing?.id ? "编辑权益包" : "新增权益包"}
             </DialogTitle>
           </DialogHeader>
           {editing && (
             <div className="grid max-h-[72vh] gap-3 overflow-auto pr-1 sm:grid-cols-2">
-              <Field label="套餐名称">
+              <Field label="权益包名称">
                 <Input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
               </Field>
               <Field label="副标题/说明">
                 <Input value={editing.subtitle} onChange={(e) => setEditing({ ...editing, subtitle: e.target.value })} />
               </Field>
-              <Field label="价格">
-                <Input value={editing.price} onChange={(e) => setEditing({ ...editing, price: e.target.value })} placeholder="例如 69.9" />
+              <Field label="展示信息">
+                <Input value={editing.price} onChange={(e) => setEditing({ ...editing, price: e.target.value })} placeholder="例如 内测开放" />
               </Field>
-              <Field label="积分数量">
+              <Field label="权益点数">
                 <Input type="number" value={editing.credits} onChange={(e) => setEditing({ ...editing, credits: e.target.value })} />
               </Field>
               <Field label="标签文案">
@@ -323,7 +323,7 @@ export function RechargePackagesPanel() {
                   value={editing.featuresText}
                   rows={6}
                   onChange={(e) => setEditing({ ...editing, featuresText: e.target.value })}
-                  placeholder={"1,000 积分\n基础图像模型\n标准排队速度"}
+                  placeholder={"1,000 权益点\n基础图像模型\n标准排队速度"}
                   className="font-mono text-xs"
                 />
               </div>

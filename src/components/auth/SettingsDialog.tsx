@@ -6,7 +6,7 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
       <section className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
         <h2 className="text-xl font-semibold">账户设置</h2>
         <p className="mt-3 text-sm text-muted-foreground">
-          头像上传、资料修改与密码设置将在沐莫账户服务和 R2 上传接口完成后开放。
+          个人资料、头像与账号安全设置正在准备中，后续将陆续开放。
         </p>
         <button
           type="button"

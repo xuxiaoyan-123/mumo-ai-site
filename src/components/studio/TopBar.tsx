@@ -1,12 +1,10 @@
 import { lazy, Suspense, useState } from "react";
-import { Zap, Plus, Bell, History } from "lucide-react";
+import { Bell, Headphones, History, Sparkles, Zap } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { UserMenu } from "@/components/auth/UserMenu";
 import { AdBanner } from "./AdBanner";
 
-const RedeemDialog = lazy(() => import("@/components/auth/RedeemDialog").then((m) => ({ default: m.RedeemDialog })));
 const ContactDialog = lazy(() => import("./ContactDialog").then((m) => ({ default: m.ContactDialog })));
-
 
 type Props = {
   credits: number;
@@ -16,65 +14,51 @@ type Props = {
 };
 
 export function TopBar({ credits, onOpenHistory, onOpenAnnouncements, onSwitchAccount }: Props) {
-  const [redeemOpen, setRedeemOpen] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
-  return (
-    <header className="flex min-h-14 w-full shrink-0 flex-wrap items-center gap-2 border-b border-border/60 bg-card/70 px-2 py-2 backdrop-blur-2xl md:h-14 md:flex-nowrap md:justify-between md:gap-0 md:px-4 md:py-0">
-      {/* Left: Logo — 点击回到生成主页并刷新 */}
-      <button
-        type="button"
-        title="返回主页并刷新"
-        onClick={() => {
-          if (window.location.pathname === "/") {
-            window.location.reload();
-          } else {
-            window.location.assign("/");
-          }
-        }}
-        className="flex shrink-0 items-center gap-2.5 bg-transparent p-1 focus:outline-none focus-visible:outline-none"
-      >
-        <span aria-label="沐莫返回主页" className="font-display text-xl font-semibold">沐莫</span>
-      </button>
 
-      {/* Middle: Ad banner */}
+  return (
+    <header className="relative z-40 flex min-h-16 w-full shrink-0 flex-wrap items-center gap-2 border-b border-white/[0.08] bg-[#070711]/80 px-3 py-2 backdrop-blur-2xl md:h-16 md:flex-nowrap md:px-5 md:py-0">
+      <Link to="/" className="group flex shrink-0 items-center gap-3 rounded-xl pr-2 focus:outline-none">
+        <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-fuchsia-300/30 bg-gradient-to-br from-fuchsia-500 via-violet-600 to-cyan-400 shadow-[0_0_24px_rgba(217,70,239,.38)]">
+          <span className="absolute inset-[1px] rounded-[10px] bg-[#0a0815]/45" />
+          <Sparkles className="relative h-4 w-4 text-white transition-transform group-hover:rotate-12" />
+        </span>
+        <span className="min-w-0">
+          <span className="block whitespace-nowrap text-base font-semibold tracking-wide text-white md:text-lg">沐莫</span>
+          <span className="hidden whitespace-nowrap text-[9px] uppercase tracking-[0.22em] text-fuchsia-200/60 sm:block">Mumo AI Studio</span>
+        </span>
+        <span className="hidden rounded-full border border-fuchsia-400/25 bg-fuchsia-400/10 px-2 py-1 text-[9px] font-medium text-fuchsia-200 lg:inline-flex">
+          AI 创作工作台
+        </span>
+      </Link>
+
       <AdBanner />
 
-      {/* Right: nav + actions */}
-      <div className="hidden md:flex md:items-center md:gap-1 md:pr-3">
+      <nav className="hidden items-center gap-1 lg:flex">
         <NavLinkTo to="/">在线生成</NavLinkTo>
         <NavLinkTo to="/inspiration">灵感广场</NavLinkTo>
-        <NavLink onClick={() => setContactOpen(true)}>联系客服</NavLink>
-      </div>
+      </nav>
 
+      <div className="ml-auto flex min-w-0 items-center justify-end gap-1.5 md:gap-2">
+        <TopAction title="公告栏" label="公告栏" onClick={onOpenAnnouncements}>
+          <Bell className="h-4 w-4" />
+        </TopAction>
+        <TopAction title="在线客服" label="在线客服" onClick={() => setContactOpen(true)}>
+          <Headphones className="h-4 w-4" />
+        </TopAction>
+        <TopAction title="历史记录" label="历史记录" onClick={onOpenHistory}>
+          <History className="h-4 w-4" />
+        </TopAction>
 
-      <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1 md:ml-0 md:flex-none md:gap-2">
-        <IconBtn title="历史记录" onClick={onOpenHistory}><History className="h-4 w-4" /></IconBtn>
-        <IconBtn title="通知公告" onClick={onOpenAnnouncements}>
-          <span className="relative">
-            <Bell className="h-4 w-4" />
-            <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
-          </span>
-        </IconBtn>
-        <UserMenu onSwitchAccount={onSwitchAccount} />
-        <div className="mx-0.5 h-6 w-px shrink-0 bg-border md:mx-1" />
-        <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-white/[0.03] px-2 py-1.5 md:gap-2 md:px-3">
-          <Zap className="h-3.5 w-3.5 text-primary" fill="currentColor" />
-          <span className="font-mono text-xs font-semibold tabular-nums">{credits.toLocaleString()}</span>
-          <span className="text-[10px] font-light text-muted-foreground">点</span>
+        <div className="hidden h-7 w-px bg-white/10 sm:block" />
+        <div className="hidden shrink-0 items-center gap-1.5 rounded-full border border-violet-300/15 bg-violet-400/[0.07] px-2.5 py-1.5 sm:flex">
+          <Zap className="h-3.5 w-3.5 text-fuchsia-300" fill="currentColor" />
+          <span className="font-mono text-[11px] font-semibold tabular-nums text-white/85">{credits.toLocaleString()}</span>
+          <span className="text-[9px] text-white/35">创作点</span>
         </div>
-        <button
-          onClick={() => setRedeemOpen(true)}
-          className="flex shrink-0 items-center gap-1 rounded-full bg-gradient-aurora px-2.5 py-1.5 text-xs font-semibold text-primary-foreground shadow-glow transition-transform hover:scale-[1.03] md:gap-1.5 md:px-3.5"
-        >
-          <Plus className="h-3.5 w-3.5" strokeWidth={3} />
-          充值
-        </button>
+        <UserMenu onSwitchAccount={onSwitchAccount} />
       </div>
-      {redeemOpen && (
-        <Suspense fallback={null}>
-          <RedeemDialog open={redeemOpen} onOpenChange={setRedeemOpen} />
-        </Suspense>
-      )}
+
       {contactOpen && (
         <Suspense fallback={null}>
           <ContactDialog open={contactOpen} onOpenChange={setContactOpen} />
@@ -84,24 +68,15 @@ export function TopBar({ credits, onOpenHistory, onOpenAnnouncements, onSwitchAc
   );
 }
 
-function IconBtn({ children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+function TopAction({ children, label, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
   return (
     <button
+      type="button"
       {...rest}
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-all hover:border-border hover:bg-white/[0.05] hover:text-foreground md:h-9 md:w-9"
+      className="group flex h-9 items-center justify-center gap-1.5 rounded-xl border border-transparent px-2 text-white/55 transition-all hover:border-fuchsia-400/20 hover:bg-fuchsia-400/[0.08] hover:text-fuchsia-100 md:px-2.5"
     >
-      {children}
-    </button>
-  );
-}
-
-function NavLink({ children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      {...rest}
-      className="rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground"
-    >
-      {children}
+      <span className="transition-transform group-hover:scale-110">{children}</span>
+      <span className="hidden text-[11px] font-medium xl:inline">{label}</span>
     </button>
   );
 }
@@ -110,12 +85,10 @@ function NavLinkTo({ to, children }: { to: "/" | "/inspiration"; children: React
   return (
     <Link
       to={to}
-      className="rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground"
-      activeProps={{ className: "rounded-md px-3 py-1.5 text-xs font-medium text-foreground bg-white/[0.05]" }}
+      className="rounded-lg px-3 py-2 text-[11px] font-medium text-white/45 transition-colors hover:bg-white/[0.04] hover:text-white/85"
+      activeProps={{ className: "rounded-lg bg-white/[0.05] px-3 py-2 text-[11px] font-medium text-white" }}
     >
       {children}
     </Link>
   );
 }
-
-

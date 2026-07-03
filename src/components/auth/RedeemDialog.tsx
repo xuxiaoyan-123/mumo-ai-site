@@ -25,27 +25,27 @@ type Plan = {
 const PLANS: Plan[] = [
   {
     id: "trial",
-    title: "试用套餐",
-    price: "9.9",
-    subtitle: "适合偶尔体验的尝鲜用户",
+    title: "体验权益包",
+    price: "内测",
+    subtitle: "适合初次体验的内测用户",
     credits: 1000,
-    features: ["1,000 积分", "基础图像模型", "标准排队速度"],
+    features: ["1,000 权益点", "基础创作能力", "标准任务队列"],
   },
   {
     id: "starter",
-    title: "入门套餐",
-    price: "29.9",
+    title: "入门权益包",
+    price: "内测",
     subtitle: "轻量级创作者的首选",
     credits: 3000,
-    features: ["3,000 积分", "所有基础模型", "标准排队速度"],
+    features: ["3,000 权益点", "基础创作能力", "标准任务队列"],
   },
   {
     id: "core",
-    title: "主力套餐",
-    price: "69.9",
-    subtitle: "性价比之王，适合日常创作",
+    title: "进阶权益包",
+    price: "内测",
+    subtitle: "适合持续进行日常创作",
     credits: 7000,
-    features: ["7,000 积分", "解锁高级模型 (Wan2.6/Pro)", "优先生成队列"],
+    features: ["7,000 权益点", "进阶创作能力", "优先任务队列"],
     highlighted: true,
     isPopular: true,
     badgeText: "最受欢迎",
@@ -53,19 +53,19 @@ const PLANS: Plan[] = [
   },
   {
     id: "pro",
-    title: "专业套餐",
-    price: "129",
+    title: "专业权益包",
+    price: "内测",
     subtitle: "为高频重度使用者打造",
     credits: 13000,
-    features: ["13,000 积分", "全模型无限制访问", "极速极享队列", "专属客服支持"],
+    features: ["13,000 权益点", "专业创作能力", "优先任务队列", "专属服务支持"],
   },
   {
     id: "premium",
-    title: "高端套餐",
-    price: "199",
-    subtitle: "工作室与商业变现必备",
+    title: "团队权益包",
+    price: "内测",
+    subtitle: "适合工作室与团队协作",
     credits: 20000,
-    features: ["20,000 积分", "最高优先级算力", "支持 API 批量调用", "客服24小时在线服务"],
+    features: ["20,000 权益点", "团队创作能力", "优先任务队列", "团队服务支持"],
     icon: <Crown className="h-4 w-4" />,
   },
 ];
@@ -118,7 +118,7 @@ export function RedeemDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       .catch(() => {
         if (!cancelled) {
           setPlans(PLANS);
-          toast.info("套餐配置读取失败，已使用默认套餐");
+          toast.info("权益配置读取失败，已使用默认展示");
         }
       });
     return () => { cancelled = true; };
@@ -156,12 +156,12 @@ export function RedeemDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       <DialogContent className="w-[calc(100vw-1rem)] max-w-6xl max-h-[calc(100dvh-1rem)] overflow-y-auto border-border/70 bg-card/90 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-2xl md:max-h-[92vh] md:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
-            <Gift className="h-5 w-5 text-primary" /> 充值中心
+            <Gift className="h-5 w-5 text-primary" /> 内测权益中心
           </DialogTitle>
-          <p className="text-xs text-muted-foreground">选择适合你的套餐，购买后积分立即到账</p>
+          <p className="text-xs text-muted-foreground">内测权益配置将在后续开放</p>
         </DialogHeader>
 
-        {/* 价格套餐卡片区 */}
+        {/* 内测权益展示区 */}
         <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2 md:gap-4 lg:grid-cols-5">
           {plans.map((p) => (
               <PlanCard key={p.id} plan={p} />
@@ -171,13 +171,13 @@ export function RedeemDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         {/* 兑换码区 */}
         <div className="mt-6 w-full rounded-2xl border border-emerald-500/30 bg-gray-900/50 p-4 shadow-[0_0_15px_rgba(16,185,129,0.15)] backdrop-blur-sm md:mt-8 md:p-5">
           <div className="mb-3 flex items-center gap-2">
-            <span className="text-base font-bold text-emerald-400">⚡ 极速兑换，秒速到账</span>
+            <span className="text-base font-bold text-emerald-400">内测兑换码</span>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="请输入您在发卡网购买的卡密..."
+              placeholder="请输入内测兑换码"
               className="h-11 min-w-0 flex-1 border-emerald-500/20 bg-black/40 font-mono tracking-wider text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-emerald-500/40"
               onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
               disabled={loading || cooldown > 0}
@@ -190,18 +190,17 @@ export function RedeemDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               {loading ? (
                 <span className="flex items-center gap-1.5">
                   <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  激活中…
+                  兑换中…
                 </span>
               ) : cooldown > 0 ? (
                 `请稍候 ${cooldown}s`
               ) : (
-                "激活权益"
+                "确认兑换"
               )}
             </Button>
           </div>
           <p className="mt-3 text-xs text-zinc-400">
-            还没有兑换码？
-            <span className="ml-1 font-medium text-zinc-300">支付功能暂未开放</span>
+            兑换功能暂未开放，仅供后续客户配置
           </p>
         </div>
 
@@ -258,7 +257,7 @@ function PlanCard({ plan }: { plan: Plan }) {
       <p className="relative mt-1 text-xs text-zinc-400">{plan.subtitle}</p>
 
       <div className="relative mt-4 flex items-baseline gap-1">
-        <span className={cn("text-sm", highlight ? "text-zinc-300" : "text-zinc-500")}>¥</span>
+        <span className={cn("text-sm", highlight ? "text-zinc-300" : "text-zinc-500")}>阶段</span>
         <span
           className={cn(
             "font-bold tabular-nums leading-none",
@@ -282,7 +281,7 @@ function PlanCard({ plan }: { plan: Plan }) {
         disabled
         className="relative mt-5 w-full cursor-not-allowed border border-zinc-700 bg-zinc-800/60 font-semibold text-zinc-400 opacity-70 shadow-none"
       >
-        支付功能暂未开放
+        兑换功能暂未开放
       </Button>
     </div>
   );

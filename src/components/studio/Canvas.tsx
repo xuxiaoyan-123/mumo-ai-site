@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Download, Copy, Maximize2, Sparkles, ArrowUpRight, X, Clock, ImageIcon, ListOrdered, Loader2, CheckCircle2, RotateCcw } from "lucide-react";
+import { Download, Copy, Maximize2, Sparkles, ArrowUpRight, X, Clock, ImageIcon, ListOrdered, Loader2, CheckCircle2, RotateCcw, BookmarkPlus } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -83,15 +83,17 @@ function safeDecodeFilename(value: string) {
 }
 
 function getDownloadFilename(url: string, fallback = "mumo-generated-image.png") {
+  const withBrandPrefix = (filename: string) =>
+    filename.toLowerCase().startsWith("mumo-") ? filename : `mumo-${filename}`;
   try {
     const parsed = new URL(url, window.location.href);
     const lastSegment = parsed.pathname.split("/").filter(Boolean).pop();
-    if (lastSegment) return safeDecodeFilename(lastSegment);
+    if (lastSegment) return withBrandPrefix(safeDecodeFilename(lastSegment));
   } catch {
     const lastSegment = url.split("?")[0]?.split("#")[0]?.split("/").filter(Boolean).pop();
-    if (lastSegment) return safeDecodeFilename(lastSegment);
+    if (lastSegment) return withBrandPrefix(safeDecodeFilename(lastSegment));
   }
-  return fallback;
+  return withBrandPrefix(fallback);
 }
 
 async function downloadImage(url: string, fallbackFilename = "mumo-generated-image.png") {
@@ -261,9 +263,40 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
   const isLightboxOpen = !!lightbox || heroLightbox;
 
   return (
-    <main className="flex min-h-[70dvh] flex-col overflow-visible bg-background p-3 lg:h-full lg:min-h-0 lg:overflow-hidden">
+    <main className="mumo-grid-bg relative flex min-h-[70dvh] flex-col overflow-visible bg-[#070711] p-3 lg:h-full lg:min-h-0 lg:overflow-hidden lg:p-4">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_18%,rgba(168,85,247,.10),transparent_38%),radial-gradient(circle_at_28%_82%,rgba(236,72,153,.06),transparent_32%)]" />
+      <div className="relative mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-fuchsia-400/25 bg-fuchsia-400/10 text-fuchsia-300 shadow-[0_0_18px_rgba(217,70,239,.18)]">
+            <Sparkles className="h-4 w-4" />
+          </span>
+          <div>
+            <h1 className="text-sm font-semibold tracking-wide text-white">出图区域</h1>
+            <p className="mt-0.5 text-[10px] text-white/35">创作结果将在这里呈现</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled
+            title="作品保存能力即将上线"
+            className="flex h-9 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.025] px-3 text-[10px] text-white/35"
+          >
+            <BookmarkPlus className="h-3.5 w-3.5" />添加到历史
+          </button>
+          <button
+            type="button"
+            disabled={!generatedUrl || generating}
+            onClick={() => generatedUrl && downloadImage(generatedUrl, `mumo-${Date.now()}.png`)}
+            className="mumo-neon-button flex h-9 items-center gap-1.5 rounded-xl px-4 text-[11px] font-semibold text-white transition-transform enabled:hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Download className="h-3.5 w-3.5" />下载
+          </button>
+        </div>
+      </div>
+
       {/* Main canvas — pure, full height */}
-      <div className="group relative min-h-[62dvh] overflow-hidden rounded-2xl border border-border bg-card lg:flex-1 lg:min-h-0">
+      <div className="mumo-panel group relative min-h-[62dvh] overflow-hidden rounded-2xl border border-violet-300/15 bg-[#090915]/85 shadow-[0_28px_80px_rgba(0,0,0,.38)] lg:flex-1 lg:min-h-0">
         {generating ? (
           <QueueProgress progress={progress ?? null} />
         ) : generatedUrl ? (
@@ -280,7 +313,7 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
               <HeroAction label="一键复用" onClick={onReuseCurrent}>
                 <RotateCcw className="h-3.5 w-3.5" />
               </HeroAction>
-              <HeroAction label="下载" onClick={() => downloadImage(generatedUrl, `lovable-${Date.now()}.png`)}>
+              <HeroAction label="下载" onClick={() => downloadImage(generatedUrl, `mumo-${Date.now()}.png`)}>
                 <Download className="h-3.5 w-3.5" />
               </HeroAction>
             </div>
@@ -392,7 +425,7 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
                               <Copy className="h-2.5 w-2.5" />
                             </button>
                             <button
-                              onClick={(e) => { e.stopPropagation(); downloadImage(item.originalImageUrl, `lovable-${item.model}-${item.id}.png`); }}
+                              onClick={(e) => { e.stopPropagation(); downloadImage(item.originalImageUrl, `mumo-${item.model}-${item.id}.png`); }}
                               title="下载原图"
                               className="glass flex h-6 w-6 items-center justify-center rounded-md text-foreground/90 hover:bg-primary/20 hover:text-primary"
                             >
@@ -429,7 +462,7 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
           src={lightbox.originalImageUrl}
           prompt={lightbox.prompt ?? ""}
           model={lightbox.model}
-          filename={`lovable-${lightbox.model}-${lightbox.id}.png`}
+          filename={`mumo-${lightbox.model}-${lightbox.id}.png`}
           onClose={() => setLightbox(null)}
         />
       )}
@@ -438,7 +471,7 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
           src={generatedUrl}
           prompt={heroPrompt}
           model={heroModel}
-          filename={`lovable-${Date.now()}.png`}
+          filename={`mumo-${Date.now()}.png`}
           onClose={() => setHeroLightbox(false)}
         />
       )}
@@ -462,46 +495,34 @@ function HeroAction({ children, label, onClick }: { children: React.ReactNode; l
 
 function EmptyPlaceholder() {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-gradient-to-br from-surface to-surface-elevated">
-      <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-border/60 bg-white/[0.02]">
-        <ImageIcon className="h-8 w-8 text-muted-foreground/60" strokeWidth={1.5} />
+    <div className="relative flex h-full w-full flex-col items-center justify-center gap-5 overflow-hidden bg-gradient-to-br from-[#0b0a18] via-[#0a0915] to-[#080711]">
+      <div className="pointer-events-none absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-fuchsia-600/10 blur-[90px]" />
+      <div className="pointer-events-none absolute left-[58%] top-[32%] h-44 w-44 rounded-full bg-violet-500/10 blur-[70px]" />
+      <div className="relative flex h-24 w-24 items-center justify-center rounded-[28px] border border-fuchsia-300/15 bg-gradient-to-br from-fuchsia-500/10 via-violet-500/5 to-transparent shadow-[0_0_55px_rgba(217,70,239,.12)]">
+        <div className="absolute inset-2 rounded-[22px] border border-white/[0.04]" />
+        <ImageIcon className="h-9 w-9 text-fuchsia-200/55" strokeWidth={1.25} />
       </div>
-      <div className="text-center">
-        <div className="text-sm font-medium text-foreground/80">生成的图片将在这里显示</div>
-        <div className="mt-1.5 text-xs font-light text-muted-foreground">在左侧输入提示词，点击按钮开始体验</div>
+      <div className="relative max-w-sm px-6 text-center">
+        <div className="text-base font-semibold tracking-wide text-white/85">让灵感在这里成为画面</div>
+        <div className="mt-2 text-xs font-light leading-5 text-white/35">在左侧选择创作方向并输入画面描述<br />生成功能准备完成后即可开始创作</div>
       </div>
+      <span className="relative rounded-full border border-fuchsia-400/15 bg-fuchsia-400/[0.06] px-3 py-1.5 text-[9px] tracking-[0.18em] text-fuchsia-200/55">MUMO CREATIVE CANVAS</span>
     </div>
   );
 }
 
 const TERMINAL_LINES_POOL = [
-  "[boot] initializing inference pipeline...",
-  "[cuda] detected 8x NVIDIA H100 80GB HBM3",
-  "[alloc] reserving 73.4 GiB VRAM on node-07",
-  "[model] loading GPT-Image-2 weights (12.7B params)",
-  "[model] mmap shards: 0001/0042 ... 0042/0042 OK",
-  "[vae] warming latent decoder (f8, ch=4)",
-  "[clip] tokenizing prompt → 87 tokens",
-  "[clip] encoding text embeddings [1, 77, 768]",
-  "[ref] parsing reference image features...",
-  "[ref] extracting style codes via DINOv2-L/14",
-  "[ref] semantic similarity = 0.913",
-  "[sched] dispatching to GPU cluster (region: ap-east-1)",
-  "[queue] task accepted, priority=high",
-  "[diffuse] sampler=DPM++ 2M Karras, steps=28",
-  "[diffuse] cfg=7.5, seed=0x8f3a1c92",
-  "[diffuse] step 04/28 σ=14.61 loss=0.0823",
-  "[diffuse] step 12/28 σ=6.42  loss=0.0411",
-  "[diffuse] step 20/28 σ=2.18  loss=0.0192",
-  "[refine] high-frequency detail denoising...",
-  "[refine] edge-aware sharpening kernel applied",
-  "[refine] color tone calibration ΔE=1.23",
-  "[upscale] ESRGAN x2 → 2048×2048",
-  "[safety] NSFW classifier: clean (0.002)",
-  "[safety] watermark embedded (invisible)",
-  "[encode] PNG quality=95, optimizing palette",
-  "[upload] streaming to CDN edge node...",
-  "[done] artifact ready, finalizing handoff",
+  "正在读取本次创作设置…",
+  "正在理解画面描述与主体关系…",
+  "正在整理构图与视觉层次…",
+  "正在匹配色彩与光影氛围…",
+  "正在处理参考画面的风格特征…",
+  "创作任务已进入准备队列…",
+  "正在丰富画面细节…",
+  "正在平衡主体与背景关系…",
+  "正在优化材质与光影表现…",
+  "正在检查画面完整度…",
+  "即将完成本次创作…",
 ];
 
 function QueueProgress({ progress }: { progress: GenProgress | null }) {
@@ -595,13 +616,13 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
   const stageIndex = stage === "polling" ? 1 : steps.findIndex((s) => s.key === stage);
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#03110c]">
+    <div className="relative h-full w-full overflow-hidden bg-[#090714]">
       {/* 背景：网格 + 径向光晕 + 扫描线 */}
       <div
         className="absolute inset-0 opacity-[0.35]"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(74,222,128,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(74,222,128,0.08) 1px, transparent 1px)",
+            "linear-gradient(rgba(217,70,239,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(139,92,246,0.07) 1px, transparent 1px)",
           backgroundSize: "32px 32px",
         }}
       />
@@ -609,7 +630,7 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse at 50% 40%, rgba(34,197,94,0.18), transparent 60%), radial-gradient(ellipse at 80% 90%, rgba(16,185,129,0.12), transparent 55%)",
+            "radial-gradient(ellipse at 50% 40%, rgba(217,70,239,0.18), transparent 60%), radial-gradient(ellipse at 80% 90%, rgba(124,58,237,0.14), transparent 55%)",
         }}
       />
       <div
@@ -621,7 +642,7 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
       />
       {/* 终端日志滚动 */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="scrollbar-thin absolute inset-x-0 bottom-0 top-0 overflow-hidden px-6 py-4 font-mono text-[10.5px] leading-relaxed text-emerald-300/55">
+        <div className="scrollbar-thin absolute inset-x-0 bottom-0 top-0 overflow-hidden px-6 py-4 font-mono text-[10.5px] leading-relaxed text-fuchsia-200/40">
           <div className="flex flex-col">
             {logs.map((line, idx) => {
               const isLast = idx === logs.length - 1;
@@ -631,23 +652,23 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
                   key={idx}
                   className={`whitespace-pre tracking-tight ${dim ? "opacity-30" : "opacity-90"} ${isLast ? "text-emerald-200" : ""}`}
                 >
-                  <span className="text-emerald-500/60">{String(idx).padStart(4, "0")}</span>
-                  <span className="mx-2 text-emerald-500/40">│</span>
+                  <span className="text-violet-400/55">{String(idx).padStart(4, "0")}</span>
+                  <span className="mx-2 text-fuchsia-400/35">│</span>
                   <span>{line}</span>
-                  {isLast && <span className="ml-1 inline-block h-3 w-1.5 -mb-[2px] animate-pulse bg-emerald-300/80" />}
+                  {isLast && <span className="ml-1 inline-block h-3 w-1.5 -mb-[2px] animate-pulse bg-fuchsia-300/80" />}
                 </div>
               );
             })}
             <div ref={logEndRef} />
           </div>
           {/* 顶部渐隐遮罩 */}
-          <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-[#03110c] to-transparent" />
+          <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-[#090714] to-transparent" />
         </div>
       </div>
       {/* 中心信息卡 */}
       <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-emerald-400/10 to-transparent" />
       <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 px-6">
-        <div className="glass-elevated flex w-full max-w-md flex-col items-center gap-5 rounded-2xl border border-emerald-400/20 bg-black/40 px-6 py-6 shadow-glow backdrop-blur-xl">
+        <div className="glass-elevated flex w-full max-w-md flex-col items-center gap-5 rounded-2xl border border-fuchsia-400/20 bg-black/40 px-6 py-6 shadow-glow backdrop-blur-xl">
         <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-aurora shadow-glow">
           <Sparkles className="h-7 w-7 animate-pulse text-primary-foreground" />
         </div>
@@ -705,7 +726,7 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
         <div className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
           {progress?.taskId ? <span>任务 {progress.taskId.slice(0, 8)}…</span> : <span>正在与生成节点通信…</span>}
         </div>
-        <div className="text-[10px] font-light text-emerald-200/50">您可以继续浏览历史记录，结果会在这里自动显示</div>
+        <div className="text-[10px] font-light text-fuchsia-100/45">您可以继续浏览历史记录，结果会在这里自动显示</div>
         </div>
       </div>
     </div>

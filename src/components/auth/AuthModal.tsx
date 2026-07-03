@@ -34,10 +34,10 @@ export function AuthModal({ onSuccess }: { onSuccess?: () => void }) {
         body: JSON.stringify(mode === "reset" ? { email } : { email, password }),
       });
       const payload = await response.json().catch(() => ({})) as { message?: string };
-      setMessage(payload.message ?? (response.ok ? "操作完成" : "该功能尚未开放"));
+      setMessage(payload.message ?? (response.ok ? "操作完成" : "账号服务暂不可用，请稍后再试"));
       if (response.ok && mode !== "reset") onSuccess?.();
     } catch {
-      setMessage("认证接口暂不可用，请稍后再试。");
+      setMessage("账号服务暂不可用，请稍后再试。");
     } finally {
       setSubmitting(false);
     }
@@ -46,9 +46,9 @@ export function AuthModal({ onSuccess }: { onSuccess?: () => void }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
       <section className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl">
-        <p className="text-sm font-medium text-primary">Mumo</p>
+        <p className="text-sm font-medium text-primary">Mumo · 沐莫</p>
         <h2 className="mt-1 text-2xl font-semibold">{titleByMode[mode]}</h2>
-        <p className="mt-2 text-sm text-muted-foreground">认证服务正在迁移至沐莫新后端。</p>
+        <p className="mt-2 text-sm text-muted-foreground">登录后进入沐莫 AI 创作工作台。</p>
 
         <form className="mt-6 space-y-3" onSubmit={submit}>
           <input

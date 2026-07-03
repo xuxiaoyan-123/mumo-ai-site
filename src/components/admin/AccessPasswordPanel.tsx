@@ -70,7 +70,7 @@ export function AccessPasswordPanel() {
               type="text"
               value={next}
               onChange={(e) => setNext(e.target.value)}
-              placeholder="例如：九辞后台2026"
+              placeholder="例如：沐莫管理口令示例"
             />
             <Button onClick={save} disabled={busy || !next.trim() || next.trim() === current}>
               <Save className="mr-1.5 h-3.5 w-3.5" />保存
