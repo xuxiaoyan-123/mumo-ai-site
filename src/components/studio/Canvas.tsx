@@ -263,16 +263,16 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
   const isLightboxOpen = !!lightbox || heroLightbox;
 
   return (
-    <main className="mumo-grid-bg relative flex min-h-[70dvh] flex-col overflow-visible bg-[#070711] p-3 lg:h-full lg:min-h-0 lg:overflow-hidden lg:p-4">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_18%,rgba(168,85,247,.10),transparent_38%),radial-gradient(circle_at_28%_82%,rgba(236,72,153,.06),transparent_32%)]" />
+    <main className="mumo-grid-bg relative flex min-h-[70dvh] flex-col overflow-visible bg-slate-100/28 p-3 lg:h-full lg:min-h-0 lg:overflow-hidden lg:p-4">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_18%,rgba(255,255,255,.62),transparent_38%),radial-gradient(circle_at_28%_82%,rgba(174,195,216,.18),transparent_34%)]" />
       <div className="relative mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-fuchsia-400/25 bg-fuchsia-400/10 text-fuchsia-300 shadow-[0_0_18px_rgba(217,70,239,.18)]">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/80 bg-white/55 text-[#9b8150] shadow-sm">
             <Sparkles className="h-4 w-4" />
           </span>
           <div>
-            <h1 className="text-sm font-semibold tracking-wide text-white">出图区域</h1>
-            <p className="mt-0.5 text-[10px] text-white/35">创作结果将在这里呈现</p>
+            <h1 className="text-sm font-semibold tracking-wide text-slate-800">视觉画布</h1>
+            <p className="mt-0.5 text-[10px] text-slate-400">商品主图与场景视觉将在这里呈现</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -280,7 +280,7 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
             type="button"
             disabled
             title="作品保存能力即将上线"
-            className="flex h-9 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.025] px-3 text-[10px] text-white/35"
+            className="flex h-9 items-center gap-1.5 rounded-xl border border-white/80 bg-white/42 px-3 text-[10px] text-slate-400 shadow-sm"
           >
             <BookmarkPlus className="h-3.5 w-3.5" />添加到历史
           </button>
@@ -296,12 +296,12 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
       </div>
 
       {/* Main canvas — pure, full height */}
-      <div className="mumo-panel group relative min-h-[62dvh] overflow-hidden rounded-2xl border border-violet-300/15 bg-[#090915]/85 shadow-[0_28px_80px_rgba(0,0,0,.38)] lg:flex-1 lg:min-h-0">
+      <div className="mumo-panel group relative min-h-[62dvh] overflow-hidden rounded-2xl border border-white/80 bg-white/52 shadow-[0_28px_70px_-42px_rgba(42,58,78,.45)] lg:flex-1 lg:min-h-0">
         {generating ? (
           <QueueProgress progress={progress ?? null} />
         ) : generatedUrl ? (
           <>
-            <img src={generatedUrl} alt="生成结果" className="h-full w-full object-contain bg-black" />
+            <img src={generatedUrl} alt="生成结果" className="h-full w-full object-contain bg-slate-100" />
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30 opacity-0 transition-opacity group-hover:opacity-100" />
             <div className="absolute left-3 top-3 z-20 flex items-center gap-1.5 opacity-70 transition-opacity group-hover:opacity-100">
               <HeroAction label="查看大图" onClick={() => setHeroLightbox(true)}>
@@ -495,18 +495,18 @@ function HeroAction({ children, label, onClick }: { children: React.ReactNode; l
 
 function EmptyPlaceholder() {
   return (
-    <div className="relative flex h-full w-full flex-col items-center justify-center gap-5 overflow-hidden bg-gradient-to-br from-[#0b0a18] via-[#0a0915] to-[#080711]">
-      <div className="pointer-events-none absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-fuchsia-600/10 blur-[90px]" />
-      <div className="pointer-events-none absolute left-[58%] top-[32%] h-44 w-44 rounded-full bg-violet-500/10 blur-[70px]" />
-      <div className="relative flex h-24 w-24 items-center justify-center rounded-[28px] border border-fuchsia-300/15 bg-gradient-to-br from-fuchsia-500/10 via-violet-500/5 to-transparent shadow-[0_0_55px_rgba(217,70,239,.12)]">
-        <div className="absolute inset-2 rounded-[22px] border border-white/[0.04]" />
-        <ImageIcon className="h-9 w-9 text-fuchsia-200/55" strokeWidth={1.25} />
+    <div className="relative flex h-full w-full flex-col items-center justify-center gap-5 overflow-hidden bg-gradient-to-br from-white/68 via-slate-100/62 to-blue-100/35">
+      <div className="pointer-events-none absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/70 blur-[90px]" />
+      <div className="pointer-events-none absolute left-[58%] top-[32%] h-44 w-44 rounded-full bg-sky-200/25 blur-[70px]" />
+      <div className="relative flex h-24 w-24 items-center justify-center rounded-[28px] border border-white/90 bg-gradient-to-br from-white/78 via-slate-100/60 to-blue-100/45 shadow-[0_18px_45px_-30px_rgba(42,58,78,.55)]">
+        <div className="absolute inset-2 rounded-[22px] border border-slate-300/20" />
+        <ImageIcon className="h-9 w-9 text-slate-400" strokeWidth={1.25} />
       </div>
       <div className="relative max-w-sm px-6 text-center">
-        <div className="text-base font-semibold tracking-wide text-white/85">让灵感在这里成为画面</div>
-        <div className="mt-2 text-xs font-light leading-5 text-white/35">在左侧选择创作方向并输入画面描述<br />生成功能准备完成后即可开始创作</div>
+        <div className="text-base font-semibold tracking-wide text-slate-700">让商品创意成为专业视觉</div>
+        <div className="mt-2 text-xs font-light leading-5 text-slate-400">在左侧选择商品类型并输入画面描述<br />适用于电商主图、商品场景与品牌内容</div>
       </div>
-      <span className="relative rounded-full border border-fuchsia-400/15 bg-fuchsia-400/[0.06] px-3 py-1.5 text-[9px] tracking-[0.18em] text-fuchsia-200/55">MUMO CREATIVE CANVAS</span>
+      <span className="relative rounded-full border border-[#bca16b]/20 bg-[#eadfc8]/25 px-3 py-1.5 text-[9px] tracking-[0.18em] text-[#846f48]">MUMO COMMERCE CANVAS</span>
     </div>
   );
 }
@@ -616,13 +616,13 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
   const stageIndex = stage === "polling" ? 1 : steps.findIndex((s) => s.key === stage);
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#090714]">
-      {/* 背景：网格 + 径向光晕 + 扫描线 */}
+    <div className="relative h-full w-full overflow-hidden bg-gradient-to-br from-slate-100 via-white to-blue-100/70">
+      {/* 背景：轻量网格与柔和光晕 */}
       <div
         className="absolute inset-0 opacity-[0.35]"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(217,70,239,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(139,92,246,0.07) 1px, transparent 1px)",
+            "linear-gradient(rgba(71,85,105,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(71,85,105,0.045) 1px, transparent 1px)",
           backgroundSize: "32px 32px",
         }}
       />
@@ -630,19 +630,19 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse at 50% 40%, rgba(217,70,239,0.18), transparent 60%), radial-gradient(ellipse at 80% 90%, rgba(124,58,237,0.14), transparent 55%)",
+            "radial-gradient(ellipse at 50% 40%, rgba(255,255,255,0.82), transparent 60%), radial-gradient(ellipse at 80% 90%, rgba(148,163,184,0.16), transparent 55%)",
         }}
       />
       <div
         className="pointer-events-none absolute inset-0 mix-blend-overlay opacity-30"
         style={{
           backgroundImage:
-            "repeating-linear-gradient(0deg, rgba(255,255,255,0.04) 0 1px, transparent 1px 3px)",
+            "repeating-linear-gradient(0deg, rgba(71,85,105,0.018) 0 1px, transparent 1px 3px)",
         }}
       />
-      {/* 终端日志滚动 */}
+      {/* 创作状态滚动 */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="scrollbar-thin absolute inset-x-0 bottom-0 top-0 overflow-hidden px-6 py-4 font-mono text-[10.5px] leading-relaxed text-fuchsia-200/40">
+        <div className="scrollbar-thin absolute inset-x-0 bottom-0 top-0 overflow-hidden px-6 py-4 font-mono text-[10.5px] leading-relaxed text-slate-400/42">
           <div className="flex flex-col">
             {logs.map((line, idx) => {
               const isLast = idx === logs.length - 1;
@@ -650,25 +650,25 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
               return (
                 <div
                   key={idx}
-                  className={`whitespace-pre tracking-tight ${dim ? "opacity-30" : "opacity-90"} ${isLast ? "text-emerald-200" : ""}`}
+                  className={`whitespace-pre tracking-tight ${dim ? "opacity-25" : "opacity-75"} ${isLast ? "text-slate-600" : ""}`}
                 >
-                  <span className="text-violet-400/55">{String(idx).padStart(4, "0")}</span>
-                  <span className="mx-2 text-fuchsia-400/35">│</span>
+                  <span className="text-[#a4874f]/55">{String(idx).padStart(4, "0")}</span>
+                  <span className="mx-2 text-slate-400/35">│</span>
                   <span>{line}</span>
-                  {isLast && <span className="ml-1 inline-block h-3 w-1.5 -mb-[2px] animate-pulse bg-fuchsia-300/80" />}
+                  {isLast && <span className="ml-1 inline-block h-3 w-1.5 -mb-[2px] animate-pulse bg-slate-500/60" />}
                 </div>
               );
             })}
             <div ref={logEndRef} />
           </div>
           {/* 顶部渐隐遮罩 */}
-          <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-[#090714] to-transparent" />
+          <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-slate-100 to-transparent" />
         </div>
       </div>
       {/* 中心信息卡 */}
-      <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-emerald-400/10 to-transparent" />
+      <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/45 to-transparent" />
       <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 px-6">
-        <div className="glass-elevated flex w-full max-w-md flex-col items-center gap-5 rounded-2xl border border-fuchsia-400/20 bg-black/40 px-6 py-6 shadow-glow backdrop-blur-xl">
+        <div className="glass-elevated flex w-full max-w-md flex-col items-center gap-5 rounded-2xl border border-white/85 bg-white/58 px-6 py-6 shadow-elevated backdrop-blur-2xl">
         <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-aurora shadow-glow">
           <Sparkles className="h-7 w-7 animate-pulse text-primary-foreground" />
         </div>
@@ -698,7 +698,7 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
         )}
 
         {/* 进度条 */}
-        <div className="h-2 w-full max-w-md overflow-hidden rounded-full bg-white/5">
+        <div className="h-2 w-full max-w-md overflow-hidden rounded-full bg-slate-300/30">
           <div
             className="h-full rounded-full bg-gradient-aurora shadow-glow transition-all duration-700 ease-out"
             style={{ width: `${pct}%` }}
@@ -712,7 +712,7 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
             const active = i === stageIndex;
             return (
               <div key={s.key} className="flex flex-1 items-center gap-2">
-                <div className={`flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-semibold transition-colors ${done ? "border-primary bg-primary text-primary-foreground" : active ? "border-primary bg-primary/20 text-primary" : "border-border bg-white/[0.03] text-muted-foreground"}`}>
+                <div className={`flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-semibold transition-colors ${done ? "border-primary bg-primary text-primary-foreground" : active ? "border-primary bg-primary/10 text-primary" : "border-border bg-white/45 text-muted-foreground"}`}>
                   {done ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
                 </div>
                 <span className={`text-[11px] ${active ? "text-foreground" : done ? "text-foreground/80" : "text-muted-foreground"}`}>{s.label}</span>
@@ -724,9 +724,9 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
 
         {/* Meta line（不显示具体耗时，仅保留任务编号供排查） */}
         <div className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
-          {progress?.taskId ? <span>任务 {progress.taskId.slice(0, 8)}…</span> : <span>正在与生成节点通信…</span>}
+          {progress?.taskId ? <span>任务 {progress.taskId.slice(0, 8)}…</span> : <span>正在准备本次视觉创作…</span>}
         </div>
-        <div className="text-[10px] font-light text-fuchsia-100/45">您可以继续浏览历史记录，结果会在这里自动显示</div>
+        <div className="text-[10px] font-light text-slate-400">您可以继续浏览历史记录，结果会在这里自动显示</div>
         </div>
       </div>
     </div>

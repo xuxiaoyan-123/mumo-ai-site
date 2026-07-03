@@ -5,12 +5,12 @@ export const Route = createFileRoute("/")({
   component: Studio,
   head: () => ({
     meta: [
-      { title: "沐莫 AI 创作工作台 — Mumo" },
-      { name: "description", content: "沐莫为创作者提供专业、专注的 AI 图像创作体验。" },
-      { property: "og:title", content: "沐莫 AI 创作工作台 — Mumo" },
-      { property: "og:description", content: "沐莫为创作者提供专业、专注的 AI 图像创作体验。" },
-      { name: "twitter:title", content: "沐莫 AI 创作工作台 — Mumo" },
-      { name: "twitter:description", content: "沐莫为创作者提供专业、专注的 AI 图像创作体验。" },
+      { title: "沐莫电商视觉工作台 — Mumo" },
+      { name: "description", content: "沐莫为电商创作者提供商品主图、场景视觉与批量处理工作台。" },
+      { property: "og:title", content: "沐莫电商视觉工作台 — Mumo" },
+      { property: "og:description", content: "沐莫为电商创作者提供商品主图、场景视觉与批量处理工作台。" },
+      { name: "twitter:title", content: "沐莫电商视觉工作台 — Mumo" },
+      { name: "twitter:description", content: "沐莫为电商创作者提供商品主图、场景视觉与批量处理工作台。" },
     ],
   }),
 });
