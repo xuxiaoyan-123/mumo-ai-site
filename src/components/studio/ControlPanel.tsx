@@ -76,12 +76,13 @@ export function ControlPanel(_props: Record<string, unknown>) {
   };
 
   return (
-    <aside className="relative flex w-full self-start flex-col gap-2.5 overflow-hidden rounded-2xl border border-white/55 bg-white/20 p-2.5 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#101925]/48">
+    <aside className="relative grid w-full self-start grid-rows-[auto_auto_auto] gap-2.5 overflow-hidden rounded-2xl border border-white/55 bg-white/20 p-2.5 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#101925]/48 lg:min-h-0 lg:self-stretch lg:grid-rows-[190px_130px_minmax(0,1fr)]">
       <PanelSection
         icon={<Images className="h-4 w-4" />}
         title="参考图"
         description="逐张添加商品、场景或风格参考"
         compact
+        className="overflow-hidden"
         trailing={
           <span className="rounded-full border border-[#b89a61]/20 bg-[#eadfc8]/35 px-2 py-1 text-[9px] text-[#806a43]">
             {referenceCount} / {MAX_REFERENCE_IMAGES}
@@ -106,6 +107,7 @@ export function ControlPanel(_props: Record<string, unknown>) {
         title="基础参数"
         description="设置模型与画面规格"
         compact
+        className="overflow-hidden"
       >
         <div className="grid grid-cols-[1.35fr_1fr_1fr] gap-2">
           <div className="min-w-0">
@@ -127,18 +129,20 @@ export function ControlPanel(_props: Record<string, unknown>) {
         icon={<WandSparkles className="h-4 w-4" />}
         title="提示词输入"
         description="描述商品主体、场景、光影与构图"
+        className="min-h-[300px] lg:min-h-0"
+        bodyClassName="flex min-h-0 flex-1 flex-col"
         trailing={
           <button type="button" disabled className="flex items-center gap-1.5 rounded-full border border-slate-400/20 bg-white/45 px-2.5 py-1 text-[10px] text-slate-500 disabled:opacity-80 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-400">
             <Bot className="h-3 w-3" />AI 助手
           </button>
         }
       >
-        <div className="relative rounded-xl border border-white/80 bg-white/50 shadow-inner transition-colors focus-within:border-slate-400/45 dark:border-white/10 dark:bg-[#111c2a]/72 dark:focus-within:border-slate-500/45">
+        <div className="relative flex min-h-0 flex-1 flex-col rounded-xl border border-white/80 bg-white/50 shadow-inner transition-colors focus-within:border-slate-400/45 dark:border-white/10 dark:bg-[#111c2a]/72 dark:focus-within:border-slate-500/45">
           <textarea
             value={prompt}
             onChange={(event) => setPrompt(event.target.value.slice(0, 1000))}
             placeholder="例如：白色香薰瓶置于浅灰石材台面，柔和侧光，简洁高级的电商主图…"
-            className="h-28 w-full resize-none bg-transparent px-3.5 py-3 text-xs leading-5 text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200 dark:placeholder:text-slate-500"
+            className="min-h-28 w-full flex-1 resize-none bg-transparent px-3.5 py-3 text-xs leading-5 text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200 dark:placeholder:text-slate-500"
           />
           <div className="flex items-center justify-between border-t border-slate-400/10 px-3 py-1.5 dark:border-white/[0.07]">
             <span className="font-mono text-[9px] text-slate-400">{charCount} / 1000</span>
@@ -163,16 +167,18 @@ export function ControlPanel(_props: Record<string, unknown>) {
   );
 }
 
-function PanelSection({ icon, title, description, trailing, compact = false, children }: {
+function PanelSection({ icon, title, description, trailing, compact = false, className = "", bodyClassName = "", children }: {
   icon: React.ReactNode;
   title: string;
   description?: string;
   trailing?: React.ReactNode;
   compact?: boolean;
+  className?: string;
+  bodyClassName?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className={`mumo-panel shrink-0 rounded-2xl ${compact ? "p-2.5" : "p-3"}`}>
+    <section className={`mumo-panel flex min-h-0 flex-col rounded-2xl ${compact ? "p-2.5" : "p-3"} ${className}`}>
       <div className={`flex items-center gap-2.5 ${compact ? "mb-1.5" : "mb-2.5"}`}>
         <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/80 bg-white/55 text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/[0.055] dark:text-slate-300">
           {icon}
@@ -183,7 +189,7 @@ function PanelSection({ icon, title, description, trailing, compact = false, chi
         </div>
         {trailing}
       </div>
-      {children}
+      <div className={bodyClassName}>{children}</div>
     </section>
   );
 }
