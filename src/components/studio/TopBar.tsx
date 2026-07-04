@@ -1,7 +1,8 @@
 import { lazy, Suspense, useState } from "react";
-import { Bell, Headphones, History, Moon, Sun, Zap } from "lucide-react";
+import { Bell, CreditCard, Gift, Headphones, History, Moon, Sun, Zap } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { UserMenu } from "@/components/auth/UserMenu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AdBanner } from "./AdBanner";
 
 const ContactDialog = lazy(() =>
@@ -19,6 +20,9 @@ type Props = {
 
 export function TopBar({ credits, onOpenHistory, onOpenAnnouncements, onSwitchAccount, theme = "light", onToggleTheme }: Props) {
   const [contactOpen, setContactOpen] = useState(false);
+  const [rechargeOpen, setRechargeOpen] = useState(false);
+  const [redeemOpen, setRedeemOpen] = useState(false);
+  const [redeemCode, setRedeemCode] = useState("");
 
   return (
     <header className="relative z-40 flex min-h-16 w-full shrink-0 flex-wrap items-center gap-2 border-b border-slate-500/10 bg-white/55 px-3 py-2 shadow-[0_10px_35px_-28px_rgba(45,62,82,.45)] backdrop-blur-2xl transition-colors duration-300 dark:border-white/[0.07] dark:bg-[#111a27]/78 dark:shadow-[0_12px_35px_-28px_rgba(0,0,0,.8)] md:h-16 md:flex-nowrap md:px-6 md:py-0">
@@ -48,6 +52,12 @@ export function TopBar({ credits, onOpenHistory, onOpenAnnouncements, onSwitchAc
         </TopAction>
         <TopAction title="在线客服" label="客服" onClick={() => setContactOpen(true)}>
           <Headphones className="h-4 w-4" />
+        </TopAction>
+        <TopAction title="充值" label="充值" onClick={() => setRechargeOpen(true)}>
+          <CreditCard className="h-4 w-4" />
+        </TopAction>
+        <TopAction title="兑换兑换码" label="兑换" onClick={() => setRedeemOpen(true)}>
+          <Gift className="h-4 w-4" />
         </TopAction>
         <TopAction title="历史记录" label="作品" onClick={onOpenHistory}>
           <History className="h-4 w-4" />
@@ -79,6 +89,52 @@ export function TopBar({ credits, onOpenHistory, onOpenAnnouncements, onSwitchAc
           <ContactDialog open={contactOpen} onOpenChange={setContactOpen} />
         </Suspense>
       )}
+
+      <Dialog open={rechargeOpen} onOpenChange={setRechargeOpen}>
+        <DialogContent className="max-w-sm border-white/70 bg-white/90 p-6 shadow-[0_24px_70px_-38px_rgba(30,41,59,.45)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#172231]/95">
+          <DialogHeader>
+            <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-2xl border border-[#c5a96f]/25 bg-[#e7d9bb]/25 text-[#8d7344] dark:border-[#d2ba86]/20 dark:bg-[#d2ba86]/10 dark:text-[#d8c18f]">
+              <CreditCard className="h-5 w-5" />
+            </div>
+            <DialogTitle className="text-lg text-slate-900 dark:text-slate-100">充值功能即将开放</DialogTitle>
+            <p className="pt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">支付通道配置完成后开放，敬请期待。</p>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={redeemOpen}
+        onOpenChange={(open) => {
+          setRedeemOpen(open);
+          if (!open) setRedeemCode("");
+        }}
+      >
+        <DialogContent className="max-w-sm border-white/70 bg-white/90 p-6 shadow-[0_24px_70px_-38px_rgba(30,41,59,.45)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#172231]/95">
+          <DialogHeader>
+            <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-2xl border border-[#c5a96f]/25 bg-[#e7d9bb]/25 text-[#8d7344] dark:border-[#d2ba86]/20 dark:bg-[#d2ba86]/10 dark:text-[#d8c18f]">
+              <Gift className="h-5 w-5" />
+            </div>
+            <DialogTitle className="text-lg text-slate-900 dark:text-slate-100">兑换码</DialogTitle>
+            <p className="pt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">兑换功能配置完成后开放。</p>
+          </DialogHeader>
+          <div className="mt-2 space-y-3">
+            <input
+              value={redeemCode}
+              onChange={(event) => setRedeemCode(event.target.value)}
+              placeholder="请输入兑换码"
+              aria-label="兑换码"
+              className="h-11 w-full rounded-xl border border-slate-300/60 bg-white/65 px-3 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-slate-500/60 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-100 dark:placeholder:text-slate-500"
+            />
+            <button
+              type="button"
+              disabled
+              className="h-11 w-full cursor-not-allowed rounded-xl bg-slate-800 text-sm font-medium text-white opacity-55 dark:bg-slate-200 dark:text-slate-900"
+            >
+              暂未开放
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }
