@@ -71,9 +71,7 @@ export function TopBar({ credits, onOpenHistory, onOpenAnnouncements, onSwitchAc
           <span className="font-mono text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200">{credits.toLocaleString()}</span>
           <span className="text-[9px] text-slate-400 dark:text-slate-500">创作点</span>
         </div>
-        <div className="rounded-full border border-slate-400/25 bg-white/35 p-0.5 dark:border-white/10 dark:bg-white/[0.04]">
-          <UserMenu onSwitchAccount={onSwitchAccount} />
-        </div>
+        <UserMenu onSwitchAccount={onSwitchAccount} />
       </div>
 
       {contactOpen && (
