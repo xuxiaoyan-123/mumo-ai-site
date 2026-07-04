@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Download, Copy, Maximize2, Sparkles, ArrowUpRight, X, Clock, ImageIcon, ListOrdered, Loader2, CheckCircle2, RotateCcw, BookmarkPlus } from "lucide-react";
+import { Download, Copy, Maximize2, Sparkles, ArrowUpRight, X, Clock, ImageIcon, ListOrdered, Loader2, CheckCircle2, RotateCcw } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -265,21 +265,9 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
   return (
     <main className="mumo-grid-bg relative flex min-h-[70dvh] min-w-0 flex-col overflow-visible bg-slate-100/28 p-3 transition-colors duration-300 dark:bg-[#111a27]/72 lg:h-full lg:min-h-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-white/45 lg:p-3 dark:lg:border-white/[0.055]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_18%,rgba(255,255,255,.62),transparent_38%),radial-gradient(circle_at_28%_82%,rgba(174,195,216,.18),transparent_34%)] dark:bg-[radial-gradient(circle_at_72%_18%,rgba(120,145,173,.08),transparent_38%),radial-gradient(circle_at_28%_82%,rgba(197,169,111,.035),transparent_34%)]" />
-      <div className="relative mb-2 flex h-8 items-center px-1">
-        <h1 className="text-sm font-semibold tracking-wide text-slate-800 dark:text-slate-100">出图区</h1>
-      </div>
-
       {/* Main canvas — pure, full height */}
       <div className="mumo-panel group relative min-h-[62dvh] overflow-hidden rounded-2xl border border-white/80 bg-white/52 shadow-[0_28px_70px_-42px_rgba(42,58,78,.45)] dark:border-white/10 dark:bg-[#172333]/68 dark:shadow-[0_30px_70px_-42px_rgba(0,0,0,.8)] lg:flex-1 lg:min-h-0">
-        <div className="absolute right-3 top-3 z-30 flex items-center gap-2">
-          <button
-            type="button"
-            disabled
-            title="作品保存能力即将上线"
-            className="flex h-8 items-center gap-1.5 rounded-xl border border-white/80 bg-white/72 px-3 text-[10px] text-slate-500 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#152131]/72 dark:text-slate-400"
-          >
-            <BookmarkPlus className="h-3.5 w-3.5" />添加到历史
-          </button>
+        <div className="absolute right-3 top-3 z-30 flex items-center">
           <button
             type="button"
             disabled={!generatedUrl || generating}

@@ -78,26 +78,6 @@ export function ControlPanel(_props: Record<string, unknown>) {
   return (
     <aside className="scrollbar-hidden relative flex min-h-[640px] flex-col gap-3 overflow-y-auto rounded-2xl border border-white/55 bg-white/20 p-3.5 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#101925]/48 lg:h-full lg:min-h-0 lg:overscroll-contain lg:p-4">
       <PanelSection
-        icon={<SlidersHorizontal className="h-4 w-4" />}
-        title="基础参数"
-        description="设置模型与画面规格"
-      >
-        <FieldLabel label="模型" hint="商品视觉优化" />
-        <SelectShell value="沐莫 · 电商视觉模型" />
-
-        <div className="mt-3 grid grid-cols-2 gap-2.5">
-          <div>
-            <FieldLabel label="尺寸比例" />
-            <SelectShell value="1:1（主图）" compact />
-          </div>
-          <div>
-            <FieldLabel label="像素尺寸" />
-            <SelectShell value="2048 × 2048" compact />
-          </div>
-        </div>
-      </PanelSection>
-
-      <PanelSection
         icon={<Images className="h-4 w-4" />}
         title="参考图"
         description="逐张添加商品、场景或风格参考"
@@ -121,6 +101,27 @@ export function ControlPanel(_props: Record<string, unknown>) {
         <p className="mt-2 text-[9px] leading-4 text-slate-400">
           图片仅用于当前页面预览，刷新后自动清除
         </p>
+      </PanelSection>
+
+      <PanelSection
+        icon={<SlidersHorizontal className="h-4 w-4" />}
+        title="基础参数"
+        description="设置模型与画面规格"
+        compact
+      >
+        <FieldLabel label="模型" hint="商品视觉优化" />
+        <SelectShell value="沐莫 · 电商视觉模型" compact />
+
+        <div className="mt-2 grid grid-cols-2 gap-2.5">
+          <div>
+            <FieldLabel label="尺寸比例" />
+            <SelectShell value="1:1（主图）" compact />
+          </div>
+          <div>
+            <FieldLabel label="像素尺寸" />
+            <SelectShell value="2048 × 2048" compact />
+          </div>
+        </div>
       </PanelSection>
 
       <PanelSection
@@ -163,16 +164,17 @@ export function ControlPanel(_props: Record<string, unknown>) {
   );
 }
 
-function PanelSection({ icon, title, description, trailing, children }: {
+function PanelSection({ icon, title, description, trailing, compact = false, children }: {
   icon: React.ReactNode;
   title: string;
   description?: string;
   trailing?: React.ReactNode;
+  compact?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className="mumo-panel shrink-0 rounded-2xl p-3.5">
-      <div className="mb-3 flex items-center gap-2.5">
+    <section className={`mumo-panel shrink-0 rounded-2xl ${compact ? "p-3" : "p-3.5"}`}>
+      <div className={`flex items-center gap-2.5 ${compact ? "mb-2" : "mb-3"}`}>
         <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/80 bg-white/55 text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/[0.055] dark:text-slate-300">
           {icon}
         </span>
