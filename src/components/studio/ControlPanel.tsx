@@ -81,13 +81,14 @@ export function ControlPanel(_props: Record<string, unknown>) {
         icon={<Images className="h-4 w-4" />}
         title="参考图"
         description="逐张添加商品、场景或风格参考"
+        compact
         trailing={
           <span className="rounded-full border border-[#b89a61]/20 bg-[#eadfc8]/35 px-2 py-1 text-[9px] text-[#806a43]">
             {referenceCount} / {MAX_REFERENCE_IMAGES}
           </span>
         }
       >
-        <div className="grid grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-3 gap-2">
           {referenceImages.map((url, index) => (
             <ReferenceSlot
               key={index}
@@ -98,9 +99,6 @@ export function ControlPanel(_props: Record<string, unknown>) {
             />
           ))}
         </div>
-        <p className="mt-2 text-[9px] leading-4 text-slate-400">
-          图片仅用于当前页面预览，刷新后自动清除
-        </p>
       </PanelSection>
 
       <PanelSection
@@ -109,10 +107,11 @@ export function ControlPanel(_props: Record<string, unknown>) {
         description="设置模型与画面规格"
         compact
       >
-        <FieldLabel label="模型" hint="商品视觉优化" />
-        <SelectShell value="沐莫 · 电商视觉模型" compact />
-
-        <div className="mt-2 grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-[1.35fr_1fr_1fr] gap-2">
+          <div className="min-w-0">
+            <FieldLabel label="模型" />
+            <SelectShell value="沐莫 · 电商视觉模型" compact />
+          </div>
           <div>
             <FieldLabel label="尺寸比例" />
             <SelectShell value="1:1（主图）" compact />
@@ -218,7 +217,7 @@ function ReferenceSlot({ index, url, onSelect, onRemove }: {
 }) {
   if (!url) {
     return (
-      <label className="group relative flex h-[72px] cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-slate-400/28 bg-white/34 text-slate-400 transition-all hover:border-slate-500/50 hover:bg-white/68 hover:text-slate-600 dark:border-slate-500/30 dark:bg-white/[0.035] dark:text-slate-500 dark:hover:border-slate-400/45 dark:hover:bg-white/[0.065] dark:hover:text-slate-300 2xl:h-20">
+      <label className="group relative flex h-14 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed border-slate-400/28 bg-white/34 text-slate-400 transition-all hover:border-slate-500/50 hover:bg-white/68 hover:text-slate-600 dark:border-slate-500/30 dark:bg-white/[0.035] dark:text-slate-500 dark:hover:border-slate-400/45 dark:hover:bg-white/[0.065] dark:hover:text-slate-300 2xl:h-16">
         <ImagePlus className="h-4 w-4" />
         <span className="text-[8px]">添加参考图 {index + 1}</span>
         <input
@@ -235,7 +234,7 @@ function ReferenceSlot({ index, url, onSelect, onRemove }: {
   }
 
   return (
-    <div className="group relative h-[72px] overflow-hidden rounded-xl border border-white/90 bg-slate-100 shadow-sm dark:border-white/10 dark:bg-slate-800 2xl:h-20">
+    <div className="group relative h-14 overflow-hidden rounded-xl border border-white/90 bg-slate-100 shadow-sm dark:border-white/10 dark:bg-slate-800 2xl:h-16">
       <img src={url} alt={`参考图 ${index + 1}`} className="h-full w-full object-cover" />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-900/55 via-transparent to-transparent" />
       <span className="absolute left-1.5 top-1.5 rounded-md bg-white/78 px-1.5 py-0.5 text-[8px] font-medium text-slate-600 backdrop-blur">
