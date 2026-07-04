@@ -76,7 +76,7 @@ export function ControlPanel(_props: Record<string, unknown>) {
   };
 
   return (
-    <aside className="relative flex min-h-[640px] flex-col gap-2.5 overflow-hidden rounded-2xl border border-white/55 bg-white/20 p-3.5 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#101925]/48 lg:h-full lg:min-h-0 lg:p-4">
+    <aside className="relative flex min-h-[640px] flex-col gap-2 overflow-hidden rounded-2xl border border-white/55 bg-white/20 p-3.5 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#101925]/48 lg:h-full lg:min-h-0 lg:p-3.5">
       <PanelSection
         icon={<Images className="h-4 w-4" />}
         title="参考图"
@@ -217,7 +217,7 @@ function CompactReferenceSlot({ index, url, onSelect, onRemove }: {
 }) {
   if (!url) {
     return (
-      <label className="group relative flex h-16 min-w-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-slate-400/28 bg-white/34 text-slate-400 transition-all hover:border-slate-500/50 hover:bg-white/68 hover:text-slate-600 dark:border-slate-500/30 dark:bg-white/[0.035] dark:text-slate-500 dark:hover:border-slate-400/45 dark:hover:bg-white/[0.065] dark:hover:text-slate-300">
+      <label className="group relative flex h-20 min-w-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-slate-400/28 bg-white/34 text-slate-400 transition-all hover:border-slate-500/50 hover:bg-white/68 hover:text-slate-600 dark:border-slate-500/30 dark:bg-white/[0.035] dark:text-slate-500 dark:hover:border-slate-400/45 dark:hover:bg-white/[0.065] dark:hover:text-slate-300">
         <ImagePlus className="h-3.5 w-3.5" />
         <span className="text-[8px]">参考图 {index + 1}</span>
         <input
@@ -234,7 +234,7 @@ function CompactReferenceSlot({ index, url, onSelect, onRemove }: {
   }
 
   return (
-    <div className="group relative h-16 min-w-0 overflow-hidden rounded-xl border border-white/90 bg-slate-100 shadow-sm dark:border-white/10 dark:bg-slate-800">
+    <div className="group relative h-20 min-w-0 overflow-hidden rounded-xl border border-white/90 bg-slate-100 shadow-sm dark:border-white/10 dark:bg-slate-800">
       <img src={url} alt={`参考图 ${index + 1}`} className="h-full w-full object-cover" />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-900/55 via-transparent to-transparent" />
       <span className="absolute left-1 top-1 rounded bg-white/78 px-1 py-0.5 text-[7px] font-medium text-slate-600 backdrop-blur">
