@@ -263,16 +263,16 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
   const isLightboxOpen = !!lightbox || heroLightbox;
 
   return (
-    <main className="mumo-grid-bg relative flex min-h-[70dvh] flex-col overflow-visible bg-slate-100/28 p-3 lg:h-full lg:min-h-0 lg:overflow-hidden lg:p-4">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_18%,rgba(255,255,255,.62),transparent_38%),radial-gradient(circle_at_28%_82%,rgba(174,195,216,.18),transparent_34%)]" />
+    <main className="mumo-grid-bg relative flex min-h-[70dvh] flex-col overflow-visible bg-slate-100/28 p-3 transition-colors duration-300 dark:bg-[#111a27]/72 lg:h-full lg:min-h-0 lg:overflow-hidden lg:p-4">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_18%,rgba(255,255,255,.62),transparent_38%),radial-gradient(circle_at_28%_82%,rgba(174,195,216,.18),transparent_34%)] dark:bg-[radial-gradient(circle_at_72%_18%,rgba(120,145,173,.08),transparent_38%),radial-gradient(circle_at_28%_82%,rgba(197,169,111,.035),transparent_34%)]" />
       <div className="relative mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/80 bg-white/55 text-[#9b8150] shadow-sm">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/80 bg-white/55 text-[#9b8150] shadow-sm dark:border-white/10 dark:bg-white/[0.055] dark:text-[#d0b57d]">
             <Sparkles className="h-4 w-4" />
           </span>
           <div>
-            <h1 className="text-sm font-semibold tracking-wide text-slate-800">视觉画布</h1>
-            <p className="mt-0.5 text-[10px] text-slate-400">商品主图与场景视觉将在这里呈现</p>
+            <h1 className="text-sm font-semibold tracking-wide text-slate-800 dark:text-slate-100">视觉画布</h1>
+            <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">商品主图与场景视觉将在这里呈现</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -280,7 +280,7 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
             type="button"
             disabled
             title="作品保存能力即将上线"
-            className="flex h-9 items-center gap-1.5 rounded-xl border border-white/80 bg-white/42 px-3 text-[10px] text-slate-400 shadow-sm"
+            className="flex h-9 items-center gap-1.5 rounded-xl border border-white/80 bg-white/42 px-3 text-[10px] text-slate-400 shadow-sm dark:border-white/10 dark:bg-white/[0.045] dark:text-slate-500"
           >
             <BookmarkPlus className="h-3.5 w-3.5" />添加到历史
           </button>
@@ -296,12 +296,12 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
       </div>
 
       {/* Main canvas — pure, full height */}
-      <div className="mumo-panel group relative min-h-[62dvh] overflow-hidden rounded-2xl border border-white/80 bg-white/52 shadow-[0_28px_70px_-42px_rgba(42,58,78,.45)] lg:flex-1 lg:min-h-0">
+      <div className="mumo-panel group relative min-h-[62dvh] overflow-hidden rounded-2xl border border-white/80 bg-white/52 shadow-[0_28px_70px_-42px_rgba(42,58,78,.45)] dark:border-white/10 dark:bg-[#172333]/68 dark:shadow-[0_30px_70px_-42px_rgba(0,0,0,.8)] lg:flex-1 lg:min-h-0">
         {generating ? (
           <QueueProgress progress={progress ?? null} />
         ) : generatedUrl ? (
           <>
-            <img src={generatedUrl} alt="生成结果" className="h-full w-full object-contain bg-slate-100" />
+            <img src={generatedUrl} alt="生成结果" className="h-full w-full object-contain bg-slate-100 dark:bg-[#101923]" />
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30 opacity-0 transition-opacity group-hover:opacity-100" />
             <div className="absolute left-3 top-3 z-20 flex items-center gap-1.5 opacity-70 transition-opacity group-hover:opacity-100">
               <HeroAction label="查看大图" onClick={() => setHeroLightbox(true)}>
@@ -495,16 +495,16 @@ function HeroAction({ children, label, onClick }: { children: React.ReactNode; l
 
 function EmptyPlaceholder() {
   return (
-    <div className="relative flex h-full w-full flex-col items-center justify-center gap-5 overflow-hidden bg-gradient-to-br from-white/68 via-slate-100/62 to-blue-100/35">
-      <div className="pointer-events-none absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/70 blur-[90px]" />
-      <div className="pointer-events-none absolute left-[58%] top-[32%] h-44 w-44 rounded-full bg-sky-200/25 blur-[70px]" />
-      <div className="relative flex h-24 w-24 items-center justify-center rounded-[28px] border border-white/90 bg-gradient-to-br from-white/78 via-slate-100/60 to-blue-100/45 shadow-[0_18px_45px_-30px_rgba(42,58,78,.55)]">
-        <div className="absolute inset-2 rounded-[22px] border border-slate-300/20" />
-        <ImageIcon className="h-9 w-9 text-slate-400" strokeWidth={1.25} />
+    <div className="relative flex h-full w-full flex-col items-center justify-center gap-5 overflow-hidden bg-gradient-to-br from-white/68 via-slate-100/62 to-blue-100/35 dark:from-[#1c2a3a] dark:via-[#172333] dark:to-[#111a26]">
+      <div className="pointer-events-none absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/70 blur-[90px] dark:bg-slate-400/[0.045]" />
+      <div className="pointer-events-none absolute left-[58%] top-[32%] h-44 w-44 rounded-full bg-sky-200/25 blur-[70px] dark:bg-[#c5a96f]/[0.035]" />
+      <div className="relative flex h-24 w-24 items-center justify-center rounded-[28px] border border-white/90 bg-gradient-to-br from-white/78 via-slate-100/60 to-blue-100/45 shadow-[0_18px_45px_-30px_rgba(42,58,78,.55)] dark:border-white/10 dark:from-white/[0.08] dark:via-white/[0.04] dark:to-transparent dark:shadow-[0_22px_48px_-30px_rgba(0,0,0,.8)]">
+        <div className="absolute inset-2 rounded-[22px] border border-slate-300/20 dark:border-white/[0.055]" />
+        <ImageIcon className="h-9 w-9 text-slate-400 dark:text-slate-500" strokeWidth={1.25} />
       </div>
       <div className="relative max-w-sm px-6 text-center">
-        <div className="text-base font-semibold tracking-wide text-slate-700">让商品创意成为专业视觉</div>
-        <div className="mt-2 text-xs font-light leading-5 text-slate-400">在左侧选择商品类型并输入画面描述<br />适用于电商主图、商品场景与品牌内容</div>
+        <div className="text-base font-semibold tracking-wide text-slate-700 dark:text-slate-200">让商品创意成为专业视觉</div>
+        <div className="mt-2 text-xs font-light leading-5 text-slate-400 dark:text-slate-500">在左侧选择商品类型并输入画面描述<br />适用于电商主图、商品场景与品牌内容</div>
       </div>
       <span className="relative rounded-full border border-[#bca16b]/20 bg-[#eadfc8]/25 px-3 py-1.5 text-[9px] tracking-[0.18em] text-[#846f48]">MUMO COMMERCE CANVAS</span>
     </div>
@@ -616,7 +616,7 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
   const stageIndex = stage === "polling" ? 1 : steps.findIndex((s) => s.key === stage);
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-gradient-to-br from-slate-100 via-white to-blue-100/70">
+    <div className="relative h-full w-full overflow-hidden bg-gradient-to-br from-slate-100 via-white to-blue-100/70 dark:from-[#172333] dark:via-[#14202e] dark:to-[#101923]">
       {/* 背景：轻量网格与柔和光晕 */}
       <div
         className="absolute inset-0 opacity-[0.35]"
@@ -662,13 +662,13 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
             <div ref={logEndRef} />
           </div>
           {/* 顶部渐隐遮罩 */}
-          <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-slate-100 to-transparent" />
+          <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-slate-100 to-transparent dark:from-[#172333]" />
         </div>
       </div>
       {/* 中心信息卡 */}
       <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/45 to-transparent" />
       <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 px-6">
-        <div className="glass-elevated flex w-full max-w-md flex-col items-center gap-5 rounded-2xl border border-white/85 bg-white/58 px-6 py-6 shadow-elevated backdrop-blur-2xl">
+        <div className="glass-elevated flex w-full max-w-md flex-col items-center gap-5 rounded-2xl border border-white/85 bg-white/58 px-6 py-6 shadow-elevated backdrop-blur-2xl dark:border-white/10 dark:bg-[#1c2a3a]/72">
         <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-aurora shadow-glow">
           <Sparkles className="h-7 w-7 animate-pulse text-primary-foreground" />
         </div>
@@ -698,7 +698,7 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
         )}
 
         {/* 进度条 */}
-        <div className="h-2 w-full max-w-md overflow-hidden rounded-full bg-slate-300/30">
+        <div className="h-2 w-full max-w-md overflow-hidden rounded-full bg-slate-300/30 dark:bg-white/[0.07]">
           <div
             className="h-full rounded-full bg-gradient-aurora shadow-glow transition-all duration-700 ease-out"
             style={{ width: `${pct}%` }}

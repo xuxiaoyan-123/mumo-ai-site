@@ -117,6 +117,7 @@ export function Studio() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [forceAuth, setForceAuth] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [announcementsOpen, setAnnouncementsOpen] = useState(false);
   const [progress, setProgress] = useState<GenProgress | null>(null);
   const [adminTasks, setAdminTasks] = useState<FloatingTask[]>([]);
@@ -666,12 +667,14 @@ export function Studio() {
   const credits = profile?.credits ?? 0;
 
   return (
-    <div className="min-h-[100dvh] w-screen overflow-y-auto bg-background text-foreground lg:flex lg:h-screen lg:flex-col lg:overflow-hidden">
+    <div className={`${theme === "dark" ? "dark" : ""} mumo-theme-shell min-h-[100dvh] w-screen overflow-y-auto bg-background text-foreground transition-colors duration-300 lg:flex lg:h-screen lg:flex-col lg:overflow-hidden`}>
       <div className={`${showAuth ? "pointer-events-none select-none blur-sm" : ""} min-h-[100dvh] lg:flex lg:min-h-0 lg:flex-1 lg:flex-col`}>
         <TopBar
           credits={credits}
           onOpenHistory={() => setHistoryOpen(true)}
           onOpenAnnouncements={() => setAnnouncementsOpen(true)}
+          theme={theme}
+          onToggleTheme={() => setTheme((current) => current === "light" ? "dark" : "light")}
           onSwitchAccount={() => {
             setPreviewMode(false);
             setForceAuth(true);

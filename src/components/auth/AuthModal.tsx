@@ -72,25 +72,25 @@ export function AuthModal({ onSuccess, onPreview }: AuthModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-700/16 p-4 backdrop-blur-[10px]">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden bg-[radial-gradient(circle_at_18%_16%,rgba(255,255,255,.88),transparent_34%),radial-gradient(circle_at_82%_78%,rgba(173,193,214,.32),transparent_38%)]" />
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-700/16 p-4 backdrop-blur-[10px] dark:bg-[#09111b]/72">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden bg-[radial-gradient(circle_at_18%_16%,rgba(255,255,255,.88),transparent_34%),radial-gradient(circle_at_82%_78%,rgba(173,193,214,.32),transparent_38%)] dark:bg-[radial-gradient(circle_at_18%_16%,rgba(115,140,168,.10),transparent_34%),radial-gradient(circle_at_82%_78%,rgba(197,169,111,.045),transparent_38%)]" />
 
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="mumo-auth-title"
-        className="relative w-full max-w-[430px] overflow-hidden rounded-[30px] border border-white/80 bg-white/62 p-1 shadow-[0_32px_90px_-34px_rgba(43,59,78,.48)] backdrop-blur-3xl"
+        className="relative w-full max-w-[430px] overflow-hidden rounded-[30px] border border-white/80 bg-white/62 p-1 shadow-[0_32px_90px_-34px_rgba(43,59,78,.48)] backdrop-blur-3xl dark:border-white/10 dark:bg-[#172333]/78 dark:shadow-[0_34px_95px_-32px_rgba(0,0,0,.82)]"
       >
         <div className="pointer-events-none absolute inset-x-12 top-0 h-px bg-gradient-to-r from-transparent via-[#bda36d]/55 to-transparent" />
-        <div className="relative rounded-[26px] border border-white/65 bg-gradient-to-b from-white/52 to-slate-100/28 px-5 py-6 sm:px-7 sm:py-7">
+        <div className="relative rounded-[26px] border border-white/65 bg-gradient-to-b from-white/52 to-slate-100/28 px-5 py-6 dark:border-white/[0.07] dark:from-white/[0.045] dark:to-transparent sm:px-7 sm:py-7">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/85 bg-gradient-to-br from-slate-700 to-slate-950 text-white shadow-[0_12px_26px_-16px_rgba(30,41,59,.7)]">
                 <Sparkles className="h-[18px] w-[18px] text-[#ead7ad]" />
               </span>
               <div>
-                <p className="text-sm font-semibold tracking-[0.16em] text-slate-900">沐莫</p>
-                <p className="mt-0.5 text-[9px] uppercase tracking-[0.24em] text-slate-400">Mumo Visual Studio</p>
+                <p className="text-sm font-semibold tracking-[0.16em] text-slate-900 dark:text-slate-100">沐莫</p>
+                <p className="mt-0.5 text-[9px] uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500">Mumo Visual Studio</p>
               </div>
             </div>
             <span className="rounded-full border border-[#bca16b]/20 bg-[#eadfc8]/32 px-2.5 py-1 text-[9px] text-[#806a43]">
@@ -99,12 +99,12 @@ export function AuthModal({ onSuccess, onPreview }: AuthModalProps) {
           </div>
 
           <div className="mt-7">
-            <h2 id="mumo-auth-title" className="text-2xl font-semibold tracking-tight text-slate-900">{titleByMode[mode]}</h2>
-            <p className="mt-2 text-xs leading-5 text-slate-500">{subtitleByMode[mode]}</p>
+            <h2 id="mumo-auth-title" className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{titleByMode[mode]}</h2>
+            <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{subtitleByMode[mode]}</p>
           </div>
 
           {mode !== "reset" && (
-            <div className="mt-6 grid grid-cols-2 rounded-xl border border-white/80 bg-slate-200/38 p-1 shadow-inner">
+            <div className="mt-6 grid grid-cols-2 rounded-xl border border-white/80 bg-slate-200/38 p-1 shadow-inner dark:border-white/10 dark:bg-black/15">
               <ModeButton active={mode === "login"} onClick={() => switchMode("login")}>登录</ModeButton>
               <ModeButton active={mode === "register"} onClick={() => switchMode("register")}>注册</ModeButton>
             </div>
@@ -115,7 +115,7 @@ export function AuthModal({ onSuccess, onPreview }: AuthModalProps) {
               <span className="sr-only">邮箱</span>
               <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-slate-700" />
               <input
-                className="h-12 w-full rounded-xl border border-white/85 bg-white/58 pl-10 pr-3 text-sm text-slate-800 shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-slate-400/45 focus:bg-white/82 focus:shadow-[0_0_0_3px_rgba(71,85,105,.06)]"
+                className="h-12 w-full rounded-xl border border-white/85 bg-white/58 pl-10 pr-3 text-sm text-slate-800 shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-slate-400/45 focus:bg-white/82 focus:shadow-[0_0_0_3px_rgba(71,85,105,.06)] dark:border-white/10 dark:bg-white/[0.045] dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:border-slate-500/50 dark:focus:bg-white/[0.065]"
                 type="email"
                 inputMode="email"
                 autoComplete="email"
@@ -133,7 +133,7 @@ export function AuthModal({ onSuccess, onPreview }: AuthModalProps) {
                 <span className="sr-only">密码</span>
                 <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-slate-700" />
                 <input
-                  className="h-12 w-full rounded-xl border border-white/85 bg-white/58 pl-10 pr-11 text-sm text-slate-800 shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-slate-400/45 focus:bg-white/82 focus:shadow-[0_0_0_3px_rgba(71,85,105,.06)]"
+                  className="h-12 w-full rounded-xl border border-white/85 bg-white/58 pl-10 pr-11 text-sm text-slate-800 shadow-sm outline-none transition-all placeholder:text-slate-400 focus:border-slate-400/45 focus:bg-white/82 focus:shadow-[0_0_0_3px_rgba(71,85,105,.06)] dark:border-white/10 dark:bg-white/[0.045] dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:border-slate-500/50 dark:focus:bg-white/[0.065]"
                   type={showPassword ? "text" : "password"}
                   autoComplete={mode === "login" ? "current-password" : "new-password"}
                   placeholder="密码"
@@ -202,7 +202,7 @@ function ModeButton({ active, onClick, children }: { active: boolean; onClick: (
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-lg px-3 py-2 text-xs font-medium transition-all ${active ? "bg-white/85 text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-700"}`}
+      className={`rounded-lg px-3 py-2 text-xs font-medium transition-all ${active ? "bg-white/85 text-slate-900 shadow-sm dark:bg-white/[0.10] dark:text-slate-100" : "text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300"}`}
     >
       {children}
     </button>
