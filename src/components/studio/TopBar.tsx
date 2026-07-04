@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import { Bell, Headphones, History, Moon, Sparkles, Sun, Zap } from "lucide-react";
+import { Bell, Headphones, History, Moon, Sun, Zap } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { UserMenu } from "@/components/auth/UserMenu";
 import { AdBanner } from "./AdBanner";
@@ -23,12 +23,12 @@ export function TopBar({ credits, onOpenHistory, onOpenAnnouncements, onSwitchAc
   return (
     <header className="relative z-40 flex min-h-16 w-full shrink-0 flex-wrap items-center gap-2 border-b border-slate-500/10 bg-white/55 px-3 py-2 shadow-[0_10px_35px_-28px_rgba(45,62,82,.45)] backdrop-blur-2xl transition-colors duration-300 dark:border-white/[0.07] dark:bg-[#111a27]/78 dark:shadow-[0_12px_35px_-28px_rgba(0,0,0,.8)] md:h-16 md:flex-nowrap md:px-6 md:py-0">
       <Link to="/" className="group flex shrink-0 items-center gap-3 rounded-xl pr-3 focus:outline-none">
-        <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-white/80 bg-gradient-to-br from-slate-700 via-slate-800 to-slate-950 text-white shadow-[0_10px_22px_-14px_rgba(30,41,59,.75)]">
-          <Sparkles className="h-4 w-4 text-[#e9d6ae] transition-transform group-hover:rotate-12" />
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/70 bg-white/45 dark:border-white/10 dark:bg-white/[0.04]">
+          <img src="/mumo-logo.png" alt="莫沐AI" className="h-8 w-9 object-contain" />
         </span>
         <span className="min-w-0">
-          <span className="block whitespace-nowrap text-base font-semibold tracking-[0.12em] text-slate-900 dark:text-slate-100 md:text-lg">沐莫</span>
-          <span className="hidden whitespace-nowrap text-[9px] uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400 sm:block">Mumo Visual Studio</span>
+          <span className="block whitespace-nowrap text-base font-semibold tracking-[0.08em] text-slate-900 dark:text-slate-100 md:text-lg">莫沐AI</span>
+          <span className="hidden whitespace-nowrap text-[9px] uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400 sm:block">MUMO AI VISUAL STUDIO</span>
         </span>
         <span className="hidden rounded-full border border-[#c5a96f]/25 bg-[#e7d9bb]/25 px-2.5 py-1 text-[9px] font-medium text-[#7b6640] lg:inline-flex">
           电商视觉工作台
@@ -71,7 +71,7 @@ export function TopBar({ credits, onOpenHistory, onOpenAnnouncements, onSwitchAc
           <span className="font-mono text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200">{credits.toLocaleString()}</span>
           <span className="text-[9px] text-slate-400 dark:text-slate-500">创作点</span>
         </div>
-        <div className="rounded-full border border-slate-800/10 bg-slate-900 p-0.5 shadow-[0_10px_22px_-14px_rgba(30,41,59,.75)]">
+        <div className="rounded-full border border-slate-400/25 bg-white/35 p-0.5 dark:border-white/10 dark:bg-white/[0.04]">
           <UserMenu onSwitchAccount={onSwitchAccount} />
         </div>
       </div>
