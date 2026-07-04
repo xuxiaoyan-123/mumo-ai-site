@@ -680,7 +680,7 @@ export function Studio() {
             setForceAuth(true);
           }}
         />
-        <div className="relative grid grid-cols-1 pb-[calc(env(safe-area-inset-bottom)+10rem)] lg:min-h-0 lg:flex-1 lg:grid-cols-[500px_minmax(0,1fr)] lg:gap-2 lg:overflow-hidden lg:p-2 lg:pb-2 xl:grid-cols-[540px_minmax(0,1fr)] 2xl:grid-cols-[560px_minmax(0,1fr)]">
+        <div className="relative grid grid-cols-1 pb-[calc(env(safe-area-inset-bottom)+10rem)] lg:min-h-0 lg:flex-1 lg:grid-cols-[540px_minmax(0,1fr)] lg:gap-2 lg:overflow-hidden lg:p-2 lg:pb-2 xl:grid-cols-[600px_minmax(0,1fr)] 2xl:grid-cols-[620px_minmax(0,1fr)]">
           <ControlPanel
             onGenerateStart={handleGenerateStart}
             onGenerateDone={handleGenerateDone}
