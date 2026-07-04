@@ -263,7 +263,7 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
   const isLightboxOpen = !!lightbox || heroLightbox;
 
   return (
-    <main className="mumo-grid-bg relative flex min-h-[70dvh] flex-col overflow-visible bg-slate-100/28 p-3 transition-colors duration-300 dark:bg-[#111a27]/72 lg:h-full lg:min-h-0 lg:overflow-hidden lg:p-4">
+    <main className="mumo-grid-bg relative flex min-h-[70dvh] min-w-0 flex-col overflow-visible bg-slate-100/28 p-3 transition-colors duration-300 dark:bg-[#111a27]/72 lg:h-full lg:min-h-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-white/45 lg:p-3 dark:lg:border-white/[0.055]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_18%,rgba(255,255,255,.62),transparent_38%),radial-gradient(circle_at_28%_82%,rgba(174,195,216,.18),transparent_34%)] dark:bg-[radial-gradient(circle_at_72%_18%,rgba(120,145,173,.08),transparent_38%),radial-gradient(circle_at_28%_82%,rgba(197,169,111,.035),transparent_34%)]" />
       <div className="relative mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex items-center gap-2.5">
