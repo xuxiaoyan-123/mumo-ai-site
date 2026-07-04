@@ -76,7 +76,7 @@ export function ControlPanel(_props: Record<string, unknown>) {
   };
 
   return (
-    <aside className="scrollbar-thin relative flex min-h-[640px] flex-col gap-3 overflow-y-auto rounded-2xl border border-white/55 bg-white/20 p-3.5 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#101925]/48 lg:h-full lg:min-h-0 lg:overscroll-contain lg:p-4">
+    <aside className="scrollbar-hidden relative flex min-h-[640px] flex-col gap-3 overflow-y-auto rounded-2xl border border-white/55 bg-white/20 p-3.5 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#101925]/48 lg:h-full lg:min-h-0 lg:overscroll-contain lg:p-4">
       <PanelSection
         icon={<SlidersHorizontal className="h-4 w-4" />}
         title="基础参数"

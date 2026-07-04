@@ -265,22 +265,18 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
   return (
     <main className="mumo-grid-bg relative flex min-h-[70dvh] min-w-0 flex-col overflow-visible bg-slate-100/28 p-3 transition-colors duration-300 dark:bg-[#111a27]/72 lg:h-full lg:min-h-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-white/45 lg:p-3 dark:lg:border-white/[0.055]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_18%,rgba(255,255,255,.62),transparent_38%),radial-gradient(circle_at_28%_82%,rgba(174,195,216,.18),transparent_34%)] dark:bg-[radial-gradient(circle_at_72%_18%,rgba(120,145,173,.08),transparent_38%),radial-gradient(circle_at_28%_82%,rgba(197,169,111,.035),transparent_34%)]" />
-      <div className="relative mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/80 bg-white/55 text-[#9b8150] shadow-sm dark:border-white/10 dark:bg-white/[0.055] dark:text-[#d0b57d]">
-            <Sparkles className="h-4 w-4" />
-          </span>
-          <div>
-            <h1 className="text-sm font-semibold tracking-wide text-slate-800 dark:text-slate-100">视觉画布</h1>
-            <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">商品主图与场景视觉将在这里呈现</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+      <div className="relative mb-2 flex h-8 items-center px-1">
+        <h1 className="text-sm font-semibold tracking-wide text-slate-800 dark:text-slate-100">出图区</h1>
+      </div>
+
+      {/* Main canvas — pure, full height */}
+      <div className="mumo-panel group relative min-h-[62dvh] overflow-hidden rounded-2xl border border-white/80 bg-white/52 shadow-[0_28px_70px_-42px_rgba(42,58,78,.45)] dark:border-white/10 dark:bg-[#172333]/68 dark:shadow-[0_30px_70px_-42px_rgba(0,0,0,.8)] lg:flex-1 lg:min-h-0">
+        <div className="absolute right-3 top-3 z-30 flex items-center gap-2">
           <button
             type="button"
             disabled
             title="作品保存能力即将上线"
-            className="flex h-9 items-center gap-1.5 rounded-xl border border-white/80 bg-white/42 px-3 text-[10px] text-slate-400 shadow-sm dark:border-white/10 dark:bg-white/[0.045] dark:text-slate-500"
+            className="flex h-8 items-center gap-1.5 rounded-xl border border-white/80 bg-white/72 px-3 text-[10px] text-slate-500 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-[#152131]/72 dark:text-slate-400"
           >
             <BookmarkPlus className="h-3.5 w-3.5" />添加到历史
           </button>
@@ -288,15 +284,11 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
             type="button"
             disabled={!generatedUrl || generating}
             onClick={() => generatedUrl && downloadImage(generatedUrl, `mumo-${Date.now()}.png`)}
-            className="mumo-neon-button flex h-9 items-center gap-1.5 rounded-xl px-4 text-[11px] font-semibold text-white transition-transform enabled:hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40"
+            className="mumo-neon-button flex h-8 items-center gap-1.5 rounded-xl px-3.5 text-[10px] font-semibold text-white transition-transform enabled:hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Download className="h-3.5 w-3.5" />下载
           </button>
         </div>
-      </div>
-
-      {/* Main canvas — pure, full height */}
-      <div className="mumo-panel group relative min-h-[62dvh] overflow-hidden rounded-2xl border border-white/80 bg-white/52 shadow-[0_28px_70px_-42px_rgba(42,58,78,.45)] dark:border-white/10 dark:bg-[#172333]/68 dark:shadow-[0_30px_70px_-42px_rgba(0,0,0,.8)] lg:flex-1 lg:min-h-0">
         {generating ? (
           <QueueProgress progress={progress ?? null} />
         ) : generatedUrl ? (
@@ -312,9 +304,6 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
               </HeroAction>
               <HeroAction label="一键复用" onClick={onReuseCurrent}>
                 <RotateCcw className="h-3.5 w-3.5" />
-              </HeroAction>
-              <HeroAction label="下载" onClick={() => downloadImage(generatedUrl, `mumo-${Date.now()}.png`)}>
-                <Download className="h-3.5 w-3.5" />
               </HeroAction>
             </div>
             {heroPrompt && (
