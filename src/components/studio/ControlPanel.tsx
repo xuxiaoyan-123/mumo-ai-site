@@ -37,6 +37,7 @@ export function ControlPanel(_props: Record<string, unknown>) {
   const [referenceImages, setReferenceImages] = useState<Array<string | null>>(
     () => Array.from({ length: MAX_REFERENCE_IMAGES }, () => null),
   );
+  const [activeReferenceIndex, setActiveReferenceIndex] = useState(0);
   const objectUrlsRef = useRef(new Set<string>());
   const charCount = useMemo(() => prompt.length, [prompt]);
   const referenceCount = referenceImages.filter(Boolean).length;
@@ -76,7 +77,7 @@ export function ControlPanel(_props: Record<string, unknown>) {
   };
 
   return (
-    <aside className="scrollbar-hidden relative flex min-h-[640px] flex-col gap-3 overflow-y-auto rounded-2xl border border-white/55 bg-white/20 p-3.5 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#101925]/48 lg:h-full lg:min-h-0 lg:overscroll-contain lg:p-4">
+    <aside className="relative flex min-h-[640px] flex-col gap-2.5 overflow-hidden rounded-2xl border border-white/55 bg-white/20 p-3.5 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#101925]/48 lg:h-full lg:min-h-0 lg:p-4">
       <PanelSection
         icon={<Images className="h-4 w-4" />}
         title="参考图"
@@ -88,16 +89,23 @@ export function ControlPanel(_props: Record<string, unknown>) {
           </span>
         }
       >
-        <div className="grid grid-cols-3 gap-2">
+        <MainReferenceSlot
+          index={activeReferenceIndex}
+          url={referenceImages[activeReferenceIndex]}
+          onSelect={(file) => setReferenceImage(activeReferenceIndex, file)}
+          onRemove={() => removeReferenceImage(activeReferenceIndex)}
+        />
+        <div className="mt-2 flex items-center gap-1.5">
           {referenceImages.map((url, index) => (
-            <ReferenceSlot
+            <ReferenceThumbnail
               key={index}
               index={index}
               url={url}
-              onSelect={(file) => setReferenceImage(index, file)}
-              onRemove={() => removeReferenceImage(index)}
+              active={index === activeReferenceIndex}
+              onClick={() => setActiveReferenceIndex(index)}
             />
           ))}
+          <span className="ml-auto whitespace-nowrap text-[8px] text-slate-400 dark:text-slate-500">点击切换</span>
         </div>
       </PanelSection>
 
@@ -209,7 +217,7 @@ function SelectShell({ value, compact = false }: { value: string; compact?: bool
   );
 }
 
-function ReferenceSlot({ index, url, onSelect, onRemove }: {
+function MainReferenceSlot({ index, url, onSelect, onRemove }: {
   index: number;
   url: string | null;
   onSelect: (file?: File) => void;
@@ -217,9 +225,12 @@ function ReferenceSlot({ index, url, onSelect, onRemove }: {
 }) {
   if (!url) {
     return (
-      <label className="group relative flex h-14 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed border-slate-400/28 bg-white/34 text-slate-400 transition-all hover:border-slate-500/50 hover:bg-white/68 hover:text-slate-600 dark:border-slate-500/30 dark:bg-white/[0.035] dark:text-slate-500 dark:hover:border-slate-400/45 dark:hover:bg-white/[0.065] dark:hover:text-slate-300 2xl:h-16">
-        <ImagePlus className="h-4 w-4" />
-        <span className="text-[8px]">添加参考图 {index + 1}</span>
+      <label className="group relative flex h-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-slate-400/28 bg-white/34 text-slate-400 transition-all hover:border-slate-500/50 hover:bg-white/68 hover:text-slate-600 dark:border-slate-500/30 dark:bg-white/[0.035] dark:text-slate-500 dark:hover:border-slate-400/45 dark:hover:bg-white/[0.065] dark:hover:text-slate-300">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/80 bg-white/55 shadow-sm dark:border-white/10 dark:bg-white/[0.05]">
+          <ImagePlus className="h-4 w-4" />
+        </span>
+        <span className="text-[9px]">添加主参考图 · 槽位 {index + 1}</span>
+        <span className="text-[8px] text-slate-300 dark:text-slate-600">仅当前页面临时预览</span>
         <input
           type="file"
           accept="image/*"
@@ -234,33 +245,58 @@ function ReferenceSlot({ index, url, onSelect, onRemove }: {
   }
 
   return (
-    <div className="group relative h-14 overflow-hidden rounded-xl border border-white/90 bg-slate-100 shadow-sm dark:border-white/10 dark:bg-slate-800 2xl:h-16">
+    <div className="group relative h-24 overflow-hidden rounded-xl border border-white/90 bg-slate-100 shadow-sm dark:border-white/10 dark:bg-slate-800">
       <img src={url} alt={`参考图 ${index + 1}`} className="h-full w-full object-cover" />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-900/55 via-transparent to-transparent" />
       <span className="absolute left-1.5 top-1.5 rounded-md bg-white/78 px-1.5 py-0.5 text-[8px] font-medium text-slate-600 backdrop-blur">
         {index + 1}
       </span>
-      <button
-        type="button"
-        title={`删除参考图 ${index + 1}`}
-        onClick={onRemove}
-        className="absolute right-1.5 top-1.5 z-20 flex h-5 w-5 items-center justify-center rounded-md bg-white/82 text-slate-500 opacity-0 shadow-sm backdrop-blur transition-opacity hover:text-red-500 group-hover:opacity-100"
-      >
-        <Trash2 className="h-2.5 w-2.5" />
-      </button>
-      <label className="absolute inset-x-1.5 bottom-1.5 z-10 flex cursor-pointer items-center justify-center gap-1 rounded-md bg-slate-900/68 px-1.5 py-1 text-[8px] text-white/85 backdrop-blur transition-colors hover:bg-slate-900/82">
-        <RefreshCw className="h-2.5 w-2.5" />替换
-        <input
-          type="file"
-          accept="image/*"
-          className="sr-only"
-          onChange={(event) => {
-            onSelect(event.target.files?.[0]);
-            event.target.value = "";
-          }}
-        />
-      </label>
+      <div className="absolute bottom-1.5 right-1.5 z-10 flex items-center gap-1">
+        <label className="flex cursor-pointer items-center gap-1 rounded-md bg-slate-900/68 px-2 py-1 text-[8px] text-white/85 backdrop-blur transition-colors hover:bg-slate-900/82">
+          <RefreshCw className="h-2.5 w-2.5" />替换
+          <input
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            onChange={(event) => {
+              onSelect(event.target.files?.[0]);
+              event.target.value = "";
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          title={`删除参考图 ${index + 1}`}
+          onClick={onRemove}
+          className="flex items-center gap-1 rounded-md bg-white/82 px-2 py-1 text-[8px] text-slate-600 backdrop-blur transition-colors hover:text-red-500"
+        >
+          <Trash2 className="h-2.5 w-2.5" />删除
+        </button>
+      </div>
     </div>
+  );
+}
+
+function ReferenceThumbnail({ index, url, active, onClick }: {
+  index: number;
+  url: string | null;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={url ? `查看参考图 ${index + 1}` : `选择空槽位 ${index + 1}`}
+      onClick={onClick}
+      className={`relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg border text-[8px] transition-all ${
+        active
+          ? "border-slate-700/45 bg-white/80 text-slate-700 shadow-sm dark:border-[#c5a96f]/35 dark:bg-white/[0.10] dark:text-slate-200"
+          : "border-slate-300/30 bg-white/35 text-slate-400 hover:bg-white/65 dark:border-white/[0.08] dark:bg-white/[0.035] dark:text-slate-500"
+      }`}
+    >
+      {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : index + 1}
+      {url && active && <span className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-slate-700/35 dark:ring-[#c5a96f]/30" />}
+    </button>
   );
 }
 
