@@ -76,7 +76,7 @@ export function ControlPanel(_props: Record<string, unknown>) {
   };
 
   return (
-    <aside className="relative flex min-h-[640px] flex-col gap-2 overflow-hidden rounded-2xl border border-white/55 bg-white/20 p-3.5 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#101925]/48 lg:h-full lg:min-h-0 lg:p-3.5">
+    <aside className="relative flex w-full self-start flex-col gap-2.5 overflow-hidden rounded-2xl border border-white/55 bg-white/20 p-2.5 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#101925]/48">
       <PanelSection
         icon={<Images className="h-4 w-4" />}
         title="参考图"
@@ -172,8 +172,8 @@ function PanelSection({ icon, title, description, trailing, compact = false, chi
   children: React.ReactNode;
 }) {
   return (
-    <section className={`mumo-panel shrink-0 rounded-2xl ${compact ? "p-3" : "p-3.5"}`}>
-      <div className={`flex items-center gap-2.5 ${compact ? "mb-2" : "mb-3"}`}>
+    <section className={`mumo-panel shrink-0 rounded-2xl ${compact ? "p-2.5" : "p-3"}`}>
+      <div className={`flex items-center gap-2.5 ${compact ? "mb-1.5" : "mb-2.5"}`}>
         <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/80 bg-white/55 text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/[0.055] dark:text-slate-300">
           {icon}
         </span>
