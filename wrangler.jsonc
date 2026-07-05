@@ -20,7 +20,8 @@
     {
       "binding": "MUMO_DB",
       "database_name": "mumo_ai_db",
-      "database_id": "REPLACE_WITH_MUMO_D1_DATABASE_ID"
+      "database_id": "80780c9a-b347-4cf5-9838-24ac1548a236",
+      "migrations_dir": "migrations/d1"
     }
   ]
 }
