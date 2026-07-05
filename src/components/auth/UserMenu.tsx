@@ -86,6 +86,12 @@ export function UserMenu({ onSwitchAccount }: { onSwitchAccount: () => void }) {
             <DropdownMenuItem onSelect={() => setSettingsOpen(true)} className="cursor-pointer gap-2.5 rounded-md px-2.5 py-2 text-xs">
               <Settings className="h-3.5 w-3.5" /> 个人设置
             </DropdownMenuItem>
+            {!isAdmin && (
+              <DropdownMenuItem onSelect={() => setAdminOpen(true)} className="cursor-pointer gap-2.5 rounded-md px-2.5 py-2 text-xs text-primary focus:bg-primary/10">
+                <Shield className="h-3.5 w-3.5" />
+                管理后台
+              </DropdownMenuItem>
+            )}
             {isAdmin && (
               <DropdownMenuItem onSelect={() => setAdminOpen(true)} className="cursor-pointer gap-2.5 rounded-md px-2.5 py-2 text-xs text-primary focus:bg-primary/10">
                 {isFounder ? <Crown className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
@@ -122,9 +128,9 @@ export function UserMenu({ onSwitchAccount }: { onSwitchAccount: () => void }) {
           <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
         </Suspense>
       )}
-      {isAdmin && adminOpen && (
+      {adminOpen && (
         <Suspense fallback={null}>
-          <AdminDashboard open={adminOpen} onOpenChange={setAdminOpen} isFounder={isFounder} />
+          <AdminDashboard open={adminOpen} onOpenChange={setAdminOpen} isFounder={isAdmin ? isFounder : false} />
         </Suspense>
       )}
     </>
