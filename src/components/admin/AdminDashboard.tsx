@@ -38,12 +38,19 @@ type CreditUsageLog = {
   metadata?: unknown;
 };
 
-export function AdminDashboard({ open, onOpenChange, isFounder = false }: { open: boolean; onOpenChange: (v: boolean) => void; isFounder?: boolean }) {
+type AdminDashboardProps = {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  isFounder?: boolean;
+  previewBypassAccess?: boolean;
+};
+
+export function AdminDashboard({ open, onOpenChange, isFounder = false, previewBypassAccess = false }: AdminDashboardProps) {
   const [unlocked, setUnlocked] = useState(false);
 
   useEffect(() => { if (!open) setUnlocked(false); }, [open]);
 
-  if (open && !unlocked) {
+  if (open && !previewBypassAccess && !unlocked) {
     return (
       <AccessGate
         open={open}
@@ -59,7 +66,7 @@ export function AdminDashboard({ open, onOpenChange, isFounder = false }: { open
         <DialogHeader className="border-b border-border/60 px-6 py-4">
           <DialogTitle className="flex items-center gap-2">
             {isFounder ? <Crown className="h-4 w-4 text-primary" /> : <Shield className="h-4 w-4 text-primary" />}
-            {isFounder ? "\u521b\u59cb\u4eba\u540e\u53f0" : "\u7cfb\u7edf\u7ba1\u7406\u540e\u53f0"}
+            {previewBypassAccess ? "管理后台" : isFounder ? "\u521b\u59cb\u4eba\u540e\u53f0" : "\u7cfb\u7edf\u7ba1\u7406\u540e\u53f0"}
           </DialogTitle>
         </DialogHeader>
         <Tabs defaultValue="analytics" className="min-w-0 px-6 pb-6 pt-4">
