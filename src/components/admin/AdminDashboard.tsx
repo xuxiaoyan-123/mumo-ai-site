@@ -9,20 +9,18 @@ import {
   adminListUsers, adminResetPassword, adminAdjustCredits,
   adminBanUser, adminDeleteUser,
   adminGetUserCreditUsageLogs,
-  adminListCoupons, adminGenerateCoupons, adminDeleteCoupon,
 } from "@/lib/admin.functions";
 import { toast } from "sonner";
-import { Shield, KeyRound, Coins, Copy, Plus, RefreshCw, Users, Ticket, LayoutDashboard, Trash2, Sparkles, Megaphone, Crown, Lock, Palette, Ban, CircleCheck, Bell, ShoppingBag } from "lucide-react";
+import { Shield, KeyRound, Coins, Copy, RefreshCw, Users, Ticket, LayoutDashboard, Trash2, Sparkles, Megaphone, Crown, Lock, Palette, Ban, CircleCheck, Bell, ShoppingBag, Save, Settings2, Images } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { AnalyticsPanel } from "./AnalyticsPanel";
-import { ModelsPanel } from "./ModelsPanel";
 import { AdsPanel } from "./AdsPanel";
 import { AnnouncementsPanel } from "./AnnouncementsPanel";
 import { AdminsPanel } from "./AdminsPanel";
 import { AccessGate } from "./AccessGate";
 import { AccessPasswordPanel } from "./AccessPasswordPanel";
-import { StyleTemplatesPanel } from "./StyleTemplatesPanel";
 import { RechargePackagesPanel } from "./RechargePackagesPanel";
+import { useMumoFrontendConfig } from "@/components/studio/AnnouncementCenter";
 
 type UserRow = { id: string; email: string | null; display_name: string | null; credits: number; created_at: string; total_spent: number; is_banned?: boolean };
 type CreditUsageLog = {
@@ -38,10 +36,6 @@ type CreditUsageLog = {
   idempotency_key: string;
   created_at: string;
   metadata?: unknown;
-};
-type Coupon = {
-  id: string; code: string; amount: number; is_used: boolean;
-  used_by_email: string | null; used_at: string | null; created_at: string;
 };
 
 export function AdminDashboard({ open, onOpenChange, isFounder = false }: { open: boolean; onOpenChange: (v: boolean) => void; isFounder?: boolean }) {
@@ -65,20 +59,22 @@ export function AdminDashboard({ open, onOpenChange, isFounder = false }: { open
         <DialogHeader className="border-b border-border/60 px-6 py-4">
           <DialogTitle className="flex items-center gap-2">
             {isFounder ? <Crown className="h-4 w-4 text-primary" /> : <Shield className="h-4 w-4 text-primary" />}
-            {isFounder ? "创始人后台" : "系统管理后台"}
+            {isFounder ? "\u521b\u59cb\u4eba\u540e\u53f0" : "\u7cfb\u7edf\u7ba1\u7406\u540e\u53f0"}
           </DialogTitle>
         </DialogHeader>
         <Tabs defaultValue="analytics" className="min-w-0 px-6 pb-6 pt-4">
           <div className="w-full max-w-full overflow-x-auto overflow-y-hidden pb-1">
           <TabsList className="inline-flex w-max min-w-max flex-nowrap bg-white/[0.04]">
             <TabsTrigger value="analytics" className="shrink-0 whitespace-nowrap gap-1.5"><LayoutDashboard className="h-3.5 w-3.5" />数据仪表盘</TabsTrigger>
+            <TabsTrigger value="site" className="shrink-0 whitespace-nowrap gap-1.5"><Settings2 className="h-3.5 w-3.5" />站点与客服</TabsTrigger>
             <TabsTrigger value="users" className="shrink-0 whitespace-nowrap gap-1.5"><Users className="h-3.5 w-3.5" />用户管理</TabsTrigger>
-            <TabsTrigger value="coupons" className="shrink-0 whitespace-nowrap gap-1.5"><Ticket className="h-3.5 w-3.5" />兑换码管理</TabsTrigger>
-            <TabsTrigger value="recharge" className="shrink-0 whitespace-nowrap gap-1.5"><ShoppingBag className="h-3.5 w-3.5" />权益配置</TabsTrigger>
-            <TabsTrigger value="models" className="shrink-0 whitespace-nowrap gap-1.5"><Sparkles className="h-3.5 w-3.5" />模型点数价格控制</TabsTrigger>
+            <TabsTrigger value="coupons" className="shrink-0 whitespace-nowrap gap-1.5"><Ticket className="h-3.5 w-3.5" />兑换配置</TabsTrigger>
+            <TabsTrigger value="recharge" className="shrink-0 whitespace-nowrap gap-1.5"><ShoppingBag className="h-3.5 w-3.5" />充值套餐</TabsTrigger>
+            <TabsTrigger value="models" className="shrink-0 whitespace-nowrap gap-1.5"><Sparkles className="h-3.5 w-3.5" />模型配置</TabsTrigger>
             <TabsTrigger value="ads" className="shrink-0 whitespace-nowrap gap-1.5"><Megaphone className="h-3.5 w-3.5" />广告管理</TabsTrigger>
             <TabsTrigger value="announcements" className="shrink-0 whitespace-nowrap gap-1.5"><Bell className="h-3.5 w-3.5" />通知公告</TabsTrigger>
-            <TabsTrigger value="styles" className="shrink-0 whitespace-nowrap gap-1.5"><Palette className="h-3.5 w-3.5" />客服 &amp; 系统提示词</TabsTrigger>
+            <TabsTrigger value="styles" className="shrink-0 whitespace-nowrap gap-1.5"><Palette className="h-3.5 w-3.5" />模板配置</TabsTrigger>
+            <TabsTrigger value="works" className="shrink-0 whitespace-nowrap gap-1.5"><Images className="h-3.5 w-3.5" />作品管理</TabsTrigger>
             {isFounder && (
               <TabsTrigger value="admins" className="shrink-0 whitespace-nowrap gap-1.5"><Crown className="h-3.5 w-3.5" />管理员管理</TabsTrigger>
             )}
@@ -88,19 +84,142 @@ export function AdminDashboard({ open, onOpenChange, isFounder = false }: { open
           </TabsList>
           </div>
           <TabsContent value="analytics" className="mt-4 max-h-[70vh] overflow-auto pr-1"><AnalyticsPanel /></TabsContent>
+          <TabsContent value="site" className="mt-4 max-h-[70vh] overflow-auto pr-1"><SiteAndContactConfigPanel /></TabsContent>
           <TabsContent value="users" className="mt-4"><UsersPanel /></TabsContent>
-          <TabsContent value="coupons" className="mt-4"><CouponsPanel /></TabsContent>
+          <TabsContent value="coupons" className="mt-4"><RedeemConfigPanel /></TabsContent>
           <TabsContent value="recharge" className="mt-4"><RechargePackagesPanel /></TabsContent>
-          <TabsContent value="models" className="mt-4"><ModelsPanel /></TabsContent>
+          <TabsContent value="models" className="mt-4"><CatalogConfigPanel kind="models" /></TabsContent>
           <TabsContent value="ads" className="mt-4"><AdsPanel /></TabsContent>
           <TabsContent value="announcements" className="mt-4"><AnnouncementsPanel /></TabsContent>
-          <TabsContent value="styles" className="mt-4 max-h-[70vh] overflow-auto pr-1"><StyleTemplatesPanel /></TabsContent>
+          <TabsContent value="styles" className="mt-4 max-h-[70vh] overflow-auto pr-1"><CatalogConfigPanel kind="templates" /></TabsContent>
+          <TabsContent value="works" className="mt-4"><WorksConfigPlaceholder /></TabsContent>
           {isFounder && <TabsContent value="admins" className="mt-4"><AdminsPanel /></TabsContent>}
           {isFounder && <TabsContent value="access" className="mt-4"><AccessPasswordPanel /></TabsContent>}
         </Tabs>
       </DialogContent>
     </Dialog>
   );
+}
+function SiteAndContactConfigPanel() {
+  const { config, updateConfig } = useMumoFrontendConfig();
+  const [site, setSite] = useState(config.site);
+  const [contact, setContact] = useState(config.contact);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setSite(config.site);
+    setContact(config.contact);
+  }, [config.site, config.contact]);
+
+  const save = () => {
+    updateConfig({ ...config, site, contact });
+    setSaved(true);
+  };
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <ConfigCard title="站点配置" description="控制前台品牌区域的基础展示。">
+        <ConfigField label="品牌名"><Input value={site.brandName} onChange={(event) => { setSaved(false); setSite({ ...site, brandName: event.target.value }); }} /></ConfigField>
+        <ConfigField label="Logo 路径"><Input value={site.logoPath} onChange={(event) => { setSaved(false); setSite({ ...site, logoPath: event.target.value }); }} /></ConfigField>
+        <ConfigField label="副标题"><Input value={site.subtitle} onChange={(event) => { setSaved(false); setSite({ ...site, subtitle: event.target.value }); }} /></ConfigField>
+      </ConfigCard>
+      <ConfigCard title="客服配置" description="控制前台客服弹窗展示的信息。">
+        <ConfigField label="客服说明"><Input value={contact.description} onChange={(event) => { setSaved(false); setContact({ ...contact, description: event.target.value }); }} /></ConfigField>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ConfigField label="微信号"><Input value={contact.wechat} onChange={(event) => { setSaved(false); setContact({ ...contact, wechat: event.target.value }); }} /></ConfigField>
+          <ConfigField label="邮箱"><Input value={contact.email} onChange={(event) => { setSaved(false); setContact({ ...contact, email: event.target.value }); }} /></ConfigField>
+        </div>
+        <ConfigField label="服务时间"><Input value={contact.serviceHours} onChange={(event) => { setSaved(false); setContact({ ...contact, serviceHours: event.target.value }); }} /></ConfigField>
+        <label className="flex items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={contact.enabled} onChange={(event) => { setSaved(false); setContact({ ...contact, enabled: event.target.checked }); }} />启用客服入口内容</label>
+      </ConfigCard>
+      <div className="flex items-center justify-end gap-3 lg:col-span-2">
+        {saved && <span className="text-xs text-emerald-500">已保存到本地配置</span>}
+        <Button onClick={save}><Save className="mr-1.5 h-3.5 w-3.5" />保存站点与客服配置</Button>
+      </div>
+    </div>
+  );
+}
+
+function RedeemConfigPanel() {
+  const { config, updateConfig } = useMumoFrontendConfig();
+  const [redeem, setRedeem] = useState(config.redeem);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => setRedeem(config.redeem), [config.redeem]);
+
+  const save = () => {
+    updateConfig({ ...config, redeem });
+    setSaved(true);
+  };
+
+  return (
+    <ConfigCard title="兑换码配置" description="仅配置前台规则说明，不生成或校验真实兑换码。">
+      <ConfigField label="兑换码格式说明"><Input value={redeem.formatHint} onChange={(event) => { setSaved(false); setRedeem({ ...redeem, formatHint: event.target.value }); }} /></ConfigField>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <ConfigField label="最短长度"><Input type="number" min={1} value={redeem.minLength} onChange={(event) => { setSaved(false); setRedeem({ ...redeem, minLength: Math.max(1, Number(event.target.value) || 1) }); }} /></ConfigField>
+        <ConfigField label="单码创作点"><Input type="number" min={0} value={redeem.creditsPerCode} onChange={(event) => { setSaved(false); setRedeem({ ...redeem, creditsPerCode: Math.max(0, Number(event.target.value) || 0) }); }} /></ConfigField>
+      </div>
+      <label className="flex items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={redeem.enabled} onChange={(event) => { setSaved(false); setRedeem({ ...redeem, enabled: event.target.checked }); }} />启用兑换功能展示</label>
+      <div className="flex items-center justify-end gap-3 pt-2">
+        {saved && <span className="text-xs text-emerald-500">已保存到本地配置</span>}
+        <Button onClick={save}><Save className="mr-1.5 h-3.5 w-3.5" />保存兑换配置</Button>
+      </div>
+    </ConfigCard>
+  );
+}
+
+function CatalogConfigPanel({ kind }: { kind: "models" | "templates" }) {
+  const { config, updateConfig } = useMumoFrontendConfig();
+  const isModels = kind === "models";
+  const items = isModels ? config.models : config.templates;
+
+  const toggle = (index: number, enabled: boolean) => {
+    if (isModels) {
+      updateConfig({ ...config, models: config.models.map((item, itemIndex) => itemIndex === index ? { ...item, enabled } : item) });
+    } else {
+      updateConfig({ ...config, templates: config.templates.map((item, itemIndex) => itemIndex === index ? { ...item, enabled } : item) });
+    }
+  };
+
+  return (
+    <ConfigCard title={isModels ? "模型配置" : "模板配置"} description={isModels ? "前台模型列表后续从此配置读取。" : "模板灵感页面后续从此配置读取。"}>
+      {items.map((item, index) => (
+        <div key={`${item.name}-${index}`} className="flex items-center gap-3 rounded-xl border border-border/60 bg-white/[0.03] p-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">{item.name}</p>
+            <p className="mt-1 truncate text-xs text-muted-foreground">{"description" in item ? item.description : `${item.category} · ${item.prompt}`}</p>
+          </div>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground"><input type="checkbox" checked={item.enabled} onChange={(event) => toggle(index, event.target.checked)} />启用</label>
+        </div>
+      ))}
+      <p className="text-xs text-muted-foreground">当前为本地配置占位，不会调用外部服务。</p>
+    </ConfigCard>
+  );
+}
+
+function WorksConfigPlaceholder() {
+  return (
+    <ConfigCard title="作品管理" description="作品列表将在作品保存能力开放后展示。">
+      <div className="rounded-xl border border-dashed border-border/70 py-12 text-center">
+        <Images className="mx-auto h-7 w-7 text-muted-foreground" />
+        <p className="mt-3 text-sm font-medium">暂无作品</p>
+        <p className="mt-1 text-xs text-muted-foreground">当前仅保留管理入口占位</p>
+      </div>
+    </ConfigCard>
+  );
+}
+
+function ConfigCard({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3 rounded-xl border border-border bg-card p-5">
+      <div><h2 className="text-base font-semibold">{title}</h2><p className="mt-1 text-xs text-muted-foreground">{description}</p></div>
+      {children}
+    </section>
+  );
+}
+
+function ConfigField({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="block space-y-1 text-[11px] text-muted-foreground"><span>{label}</span>{children}</label>;
 }
 
 function UsersPanel() {
@@ -460,172 +579,6 @@ function AdjustForm({ onSubmit }: { onSubmit: (delta: number) => Promise<void> }
         <Button className="flex-1" disabled={busy} onClick={() => submit(1)}>+ 增加</Button>
         <Button className="flex-1" variant="destructive" disabled={busy} onClick={() => submit(-1)}>− 扣除</Button>
       </div>
-    </div>
-  );
-}
-
-function CouponsPanel() {
-  const list = useServerFn(adminListCoupons);
-  const gen = useServerFn(adminGenerateCoupons);
-  const del = useServerFn(adminDeleteCoupon);
-  const [coupons, setCoupons] = useState<Coupon[]>([]);
-  const [count, setCount] = useState("10");
-  const [amount, setAmount] = useState("200");
-  const [busy, setBusy] = useState(false);
-  const [justGenerated, setJustGenerated] = useState<{ code: string; amount: number }[] | null>(null);
-
-  const load = async () => {
-    try { setCoupons((await list({})) as Coupon[]); } catch (e: any) { toast.error(e.message); }
-  };
-  useEffect(() => { load(); }, []);
-
-  const generate = async () => {
-    const c = parseInt(count, 10); const a = parseInt(amount, 10);
-    if (!c || !a) return toast.error("请填写数量与面额");
-    setBusy(true);
-    try {
-      const inserted = (await gen({ data: { count: c, amount: a } })) as { code: string; amount: number }[];
-      toast.success(`已生成 ${c} 个兑换码`);
-      setJustGenerated(inserted ?? []);
-      // Try to auto-copy immediately (works while user gesture context still active)
-      try {
-        await navigator.clipboard.writeText((inserted ?? []).map(x => x.code).join("\n"));
-        toast.success("已自动复制到剪贴板");
-      } catch { /* user can click copy in dialog */ }
-      load();
-    }
-    catch (e: any) { toast.error(e.message); }
-    finally { setBusy(false); }
-  };
-
-  const copyAll = () => {
-    const unused = coupons.filter(c => !c.is_used).map(c => c.code).join("\n");
-    navigator.clipboard.writeText(unused);
-    toast.success("已复制全部未使用兑换码");
-  };
-
-  const copyJustGenerated = async () => {
-    if (!justGenerated?.length) return;
-    try {
-      await navigator.clipboard.writeText(justGenerated.map(x => x.code).join("\n"));
-      toast.success(`已复制 ${justGenerated.length} 个兑换码`);
-    } catch {
-      toast.error("复制失败，请手动选择文本复制");
-    }
-  };
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border/60 bg-white/[0.03] p-3">
-        <div className="space-y-1">
-          <label className="text-[11px] text-muted-foreground">生成数量</label>
-          <Input type="number" value={count} onChange={(e) => setCount(e.target.value)} className="h-9 w-28" />
-        </div>
-        <div className="space-y-1">
-          <label className="text-[11px] text-muted-foreground">每张面额（点）</label>
-          <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-9 w-28" />
-        </div>
-        <Button onClick={generate} disabled={busy} className="bg-gradient-aurora text-primary-foreground">
-          <Plus className="mr-1 h-3.5 w-3.5" />生成
-        </Button>
-        <div className="flex-1" />
-        <Button variant="outline" size="sm" onClick={copyAll}><Copy className="mr-1.5 h-3.5 w-3.5" />复制未使用</Button>
-        <Button variant="outline" size="sm" onClick={load}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />刷新</Button>
-      </div>
-
-      <div className="max-h-[50vh] overflow-auto rounded-lg border border-border/60">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>兑换码</TableHead>
-              <TableHead className="text-right">面额</TableHead>
-              <TableHead>状态</TableHead>
-              <TableHead>使用者</TableHead>
-              <TableHead>使用时间</TableHead>
-              <TableHead></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {coupons.map(c => (
-              <TableRow key={c.id}>
-                <TableCell className="font-mono text-xs">{c.code}</TableCell>
-                <TableCell className="text-right font-mono tabular-nums">{c.amount}</TableCell>
-                <TableCell>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] ${c.is_used ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary"}`}>
-                    {c.is_used ? "已使用" : "未使用"}
-                  </span>
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground">{c.used_by_email ?? "—"}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{c.used_at ? new Date(c.used_at).toLocaleString() : "—"}</TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => { navigator.clipboard.writeText(c.code); toast.success("已复制"); }}>
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={c.is_used}
-                          className="text-destructive hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent align="end" className="w-64 border-border/70 bg-card/90 backdrop-blur-xl">
-                        <p className="text-xs text-foreground">确定要彻底删除该兑换码吗？</p>
-                        <p className="mt-1 text-[11px] text-muted-foreground">删除后用户将无法兑换。</p>
-                        <div className="mt-3 flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={async () => {
-                              setCoupons(prev => prev.filter(x => x.id !== c.id));
-                              try {
-                                await del({ data: { couponId: c.id } });
-                                toast.success("兑换码删除成功");
-                              } catch (e: any) {
-                                toast.error(e.message);
-                                load();
-                              }
-                            }}
-                          >
-                            确认删除
-                          </Button>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      <Dialog open={!!justGenerated} onOpenChange={(v) => !v && setJustGenerated(null)}>
-        <DialogContent className="max-w-lg border-border/70 bg-card/90 backdrop-blur-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Ticket className="h-4 w-4 text-primary" />
-              本次生成的兑换码（{justGenerated?.length ?? 0} 个 · 每个 {justGenerated?.[0]?.amount ?? 0} 权益点）
-            </DialogTitle>
-          </DialogHeader>
-          <textarea
-            readOnly
-            value={(justGenerated ?? []).map(x => x.code).join("\n")}
-            className="h-64 w-full resize-none rounded-md border border-border/60 bg-black/40 p-3 font-mono text-xs text-foreground focus:outline-none"
-            onFocus={(e) => e.currentTarget.select()}
-          />
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={() => setJustGenerated(null)}>关闭</Button>
-            <Button size="sm" className="bg-gradient-aurora text-primary-foreground" onClick={copyJustGenerated}>
-              <Copy className="mr-1.5 h-3.5 w-3.5" />一键复制全部
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

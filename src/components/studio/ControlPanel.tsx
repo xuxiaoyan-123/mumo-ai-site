@@ -13,6 +13,7 @@ import {
   Trash2,
   WandSparkles,
 } from "lucide-react";
+import { toast } from "sonner";
 
 export type GenProgress = {
   stage: "submitting" | "queued" | "rendering" | "polling";
@@ -34,6 +35,7 @@ const promptIdeas = [
 
 export function ControlPanel(_props: Record<string, unknown>) {
   const [prompt, setPrompt] = useState("");
+  const credits = typeof _props.credits === "number" ? _props.credits : 0;
   const [referenceImages, setReferenceImages] = useState<Array<string | null>>(
     () => Array.from({ length: MAX_REFERENCE_IMAGES }, () => null),
   );
@@ -52,6 +54,18 @@ export function ControlPanel(_props: Record<string, unknown>) {
   const useRandomPrompt = () => {
     const currentIndex = promptIdeas.indexOf(prompt);
     setPrompt(promptIdeas[(currentIndex + 1 + promptIdeas.length) % promptIdeas.length]);
+  };
+
+  const startVisualCreation = () => {
+    if (!prompt.trim()) {
+      toast.info("请先输入画面描述");
+      return;
+    }
+    if (credits <= 0) {
+      toast.info("创作点不足，暂无法生成");
+      return;
+    }
+    toast.info("AI 生成功能配置完成后开放");
   };
 
   const setReferenceImage = (index: number, file?: File) => {
@@ -155,12 +169,11 @@ export function ControlPanel(_props: Record<string, unknown>) {
 
         <button
           type="button"
-          disabled
-          title="生成功能正在准备中"
-          className="mumo-neon-button mt-2.5 flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-90"
+          onClick={startVisualCreation}
+          title="开始视觉创作"
+          className="mumo-neon-button mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0"
         >
           <WandSparkles className="h-4 w-4 text-[#ead8ae]" />开始视觉创作
-          <span className="text-[9px] font-normal text-white/55">准备中</span>
         </button>
       </PanelSection>
     </aside>

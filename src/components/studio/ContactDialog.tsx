@@ -1,68 +1,32 @@
-import { useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { useServerFn } from "@tanstack/react-start";
-import { getContactInfo } from "@/lib/admin.functions";
-import { Copy, Headphones, MessageCircle } from "lucide-react";
-import { toast } from "sonner";
+import { Headphones, Mail, MessageCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useMumoFrontendConfig } from "./AnnouncementCenter";
 
 type Props = { open: boolean; onOpenChange: (v: boolean) => void };
 
 export function ContactDialog({ open, onOpenChange }: Props) {
-  const fetchFn = useServerFn(getContactInfo);
-  const [wechat, setWechat] = useState("");
-  const [qq, setQq] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    setLoading(true);
-    fetchFn()
-      .then((r: any) => {
-        setWechat(r?.wechat ?? "");
-        setQq(r?.qq ?? "");
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [open]);
-
-  const copy = async (val: string, label: string) => {
-    try {
-      await navigator.clipboard.writeText(val);
-      toast.success(`${label} 已复制`);
-    } catch {
-      toast.error("复制失败");
-    }
-  };
+  const { config } = useMumoFrontendConfig();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-sm border-white/70 bg-white/90 p-6 shadow-[0_24px_70px_-38px_rgba(30,41,59,.45)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#172231]/95">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Headphones className="h-4 w-4 text-primary" />
-            联系客服
-          </DialogTitle>
-          <DialogDescription>添加下方任一方式，我们会尽快为您处理</DialogDescription>
+          <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-2xl border border-[#c5a96f]/25 bg-[#e7d9bb]/25 text-[#8d7344] dark:border-[#d2ba86]/20 dark:bg-[#d2ba86]/10 dark:text-[#d8c18f]">
+            <Headphones className="h-5 w-5" />
+          </div>
+          <DialogTitle className="text-lg text-slate-900 dark:text-slate-100">在线客服</DialogTitle>
+          <DialogDescription className="leading-6">{config.contact.description}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
-          <ContactRow
-            label="微信 WX"
-            value={wechat}
-            loading={loading}
-            onCopy={() => copy(wechat, "微信号")}
-          />
-          <ContactRow
-            label="QQ"
-            value={qq}
-            loading={loading}
-            onCopy={() => copy(qq, "QQ 号")}
-          />
-          {!loading && !wechat && !qq && (
-            <div className="rounded-lg border border-dashed border-border bg-white/[0.02] p-4 text-center text-xs text-muted-foreground">
-              管理员尚未配置联系方式
-            </div>
+        <div className="space-y-2 pt-2">
+          {config.contact.enabled ? (
+            <>
+              <ContactPlaceholder icon={<MessageCircle className="h-4 w-4" />} label="微信客服" value={config.contact.wechat} />
+              <ContactPlaceholder icon={<Mail className="h-4 w-4" />} label="邮箱支持" value={config.contact.email} />
+              <p className="px-1 pt-1 text-xs text-slate-400">服务时间：{config.contact.serviceHours}</p>
+            </>
+          ) : (
+            <p className="rounded-xl border border-dashed border-slate-300/50 py-8 text-center text-sm text-slate-400 dark:border-white/10">客服暂未开放</p>
           )}
         </div>
       </DialogContent>
@@ -70,26 +34,14 @@ export function ContactDialog({ open, onOpenChange }: Props) {
   );
 }
 
-function ContactRow({
-  label, value, loading, onCopy,
-}: { label: string; value: string; loading: boolean; onCopy: () => void }) {
-  if (!value && !loading) return null;
+function ContactPlaceholder({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-white/[0.03] p-3">
-      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-        <MessageCircle className="h-4 w-4" />
+    <div className="flex items-center gap-3 rounded-xl border border-slate-300/40 bg-white/50 p-3 dark:border-white/10 dark:bg-white/[0.04]">
+      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100/80 text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">{icon}</span>
+      <div>
+        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{label}</p>
+        <p className="mt-0.5 text-xs text-slate-400">{value}</p>
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
-        <div className="truncate font-mono text-sm">
-          {loading ? "加载中…" : value}
-        </div>
-      </div>
-      {!loading && value && (
-        <Button size="sm" variant="outline" onClick={onCopy}>
-          <Copy className="mr-1.5 h-3.5 w-3.5" />复制
-        </Button>
-      )}
     </div>
   );
 }

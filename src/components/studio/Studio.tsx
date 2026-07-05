@@ -9,7 +9,6 @@ import { cancelGenerationTask, cancelMyQueuedGenerationTasks, createGenerationTa
 import { isGptImage2BackupModel } from "@/lib/gpt-image-2-backup-models";
 import { toast } from "sonner";
 
-const AnnouncementCenter = lazy(() => import("./AnnouncementCenter").then((m) => ({ default: m.AnnouncementCenter })));
 const AuthModal = lazy(() => import("@/components/auth/AuthModal").then((m) => ({ default: m.AuthModal })));
 const latestResultStorageKey = (userId: string) => `mumo:studio:last-result:${userId}`;
 
@@ -118,7 +117,6 @@ export function Studio() {
   const [forceAuth, setForceAuth] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [announcementsOpen, setAnnouncementsOpen] = useState(false);
   const [progress, setProgress] = useState<GenProgress | null>(null);
   const [adminTasks, setAdminTasks] = useState<FloatingTask[]>([]);
   const [adminPrimaryTaskInBatch, setAdminPrimaryTaskInBatch] = useState(false);
@@ -671,8 +669,6 @@ export function Studio() {
       <div className={`${showAuth ? "pointer-events-none select-none blur-sm" : ""} min-h-[100dvh] lg:flex lg:min-h-0 lg:flex-1 lg:flex-col`}>
         <TopBar
           credits={credits}
-          onOpenHistory={() => setHistoryOpen(true)}
-          onOpenAnnouncements={() => setAnnouncementsOpen(true)}
           theme={theme}
           onToggleTheme={() => setTheme((current) => current === "light" ? "dark" : "light")}
           onSwitchAccount={() => {
@@ -682,6 +678,7 @@ export function Studio() {
         />
         <div className="relative grid grid-cols-1 pb-[calc(env(safe-area-inset-bottom)+10rem)] lg:min-h-0 lg:flex-1 lg:grid-cols-[540px_minmax(0,1fr)] lg:gap-2 lg:overflow-hidden lg:p-2 lg:pb-2 xl:grid-cols-[600px_minmax(0,1fr)] 2xl:grid-cols-[620px_minmax(0,1fr)]">
           <ControlPanel
+            credits={credits}
             onGenerateStart={handleGenerateStart}
             onGenerateDone={handleGenerateDone}
             onProgress={setProgress}
@@ -736,15 +733,6 @@ export function Studio() {
           />
         )}
       </div>
-      {!showAuth && session && (
-        <Suspense fallback={null}>
-          <AnnouncementCenter
-            open={announcementsOpen}
-            onOpenChange={setAnnouncementsOpen}
-            autoOpenLatest
-          />
-        </Suspense>
-      )}
       {showAuth && (
         <Suspense fallback={null}>
           <AuthModal

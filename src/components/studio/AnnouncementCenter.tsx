@@ -1,270 +1,146 @@
-import { useEffect, useMemo, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
-import { listAnnouncements } from "@/lib/admin.functions";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Megaphone, Sparkles, AlertTriangle, CheckCircle2, Pin, ArrowUpRight, Bell } from "lucide-react";
-import { thumbUrl } from "@/lib/image-url";
+/* eslint-disable react-refresh/only-export-components */
+import { useEffect, useState } from "react";
+import { Bell } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-export type Announcement = {
+export type MumoAnnouncement = {
   id: string;
   title: string;
   content: string;
-  type: "info" | "success" | "warning" | "promo";
-  image_url: string | null;
-  link_url: string | null;
-  link_label: string | null;
-  is_pinned: boolean;
-  created_at: string;
+  enabled: boolean;
+  sortOrder: number;
 };
 
-const SEEN_KEY = "mumo-seen-announcements-v1";
+export type MumoRechargePlan = {
+  id: string;
+  name: string;
+  credits: number;
+  price: string;
+  recommendedLabel: string;
+  enabled: boolean;
+};
 
-function readSeen(): Set<string> {
+export type MumoFrontendConfig = {
+  site: { brandName: string; logoPath: string; subtitle: string };
+  announcements: MumoAnnouncement[];
+  contact: { description: string; wechat: string; email: string; serviceHours: string; enabled: boolean };
+  rechargePlans: MumoRechargePlan[];
+  redeem: { formatHint: string; minLength: number; creditsPerCode: number; enabled: boolean };
+  models: Array<{ name: string; description: string; enabled: boolean }>;
+  templates: Array<{ name: string; category: string; prompt: string; enabled: boolean }>;
+};
+
+export const DEFAULT_MUMO_FRONTEND_CONFIG: MumoFrontendConfig = {
+  site: {
+    brandName: "莫沐AI",
+    logoPath: "/mumo-logo.png",
+    subtitle: "MUMO AI VISUAL STUDIO",
+  },
+  announcements: [
+    { id: "welcome", title: "欢迎使用莫沐AI", content: "电商视觉创作工具已开放体验。", enabled: true, sortOrder: 1 },
+    { id: "service", title: "创作服务说明", content: "充值与兑换服务当前暂未开放。", enabled: true, sortOrder: 2 },
+    { id: "works", title: "作品中心", content: "作品保存能力即将上线。", enabled: true, sortOrder: 3 },
+  ],
+  contact: {
+    description: "如需帮助，可通过以下方式联系我们。",
+    wechat: "待配置",
+    email: "support@mumo.example",
+    serviceHours: "工作日 09:00–18:00",
+    enabled: true,
+  },
+  rechargePlans: [
+    { id: "starter", name: "入门包", credits: 1000, price: "¥ --", recommendedLabel: "", enabled: true },
+    { id: "standard", name: "标准包", credits: 3000, price: "¥ --", recommendedLabel: "推荐", enabled: true },
+    { id: "professional", name: "专业包", credits: 8000, price: "¥ --", recommendedLabel: "", enabled: true },
+  ],
+  redeem: {
+    formatHint: "请输入不少于 6 位的兑换码",
+    minLength: 6,
+    creditsPerCode: 0,
+    enabled: false,
+  },
+  models: [
+    { name: "沐莫 · 电商视觉模型", description: "适合商品主图与场景视觉", enabled: true },
+  ],
+  templates: [
+    { name: "轻奢商品主图", category: "电商主图", prompt: "浅灰蓝背景，柔和侧光，突出商品材质", enabled: true },
+  ],
+};
+
+const STORAGE_KEY = "mumo-frontend-config-v1";
+const CONFIG_EVENT = "mumo-frontend-config-change";
+
+export function readMumoFrontendConfig(): MumoFrontendConfig {
+  if (typeof window === "undefined") return DEFAULT_MUMO_FRONTEND_CONFIG;
   try {
-    const raw = localStorage.getItem(SEEN_KEY);
-    if (!raw) return new Set();
-    return new Set(JSON.parse(raw) as string[]);
-  } catch {
-    return new Set();
-  }
-}
-
-function markSeen(id: string) {
-  try {
-    const seen = readSeen();
-    seen.add(id);
-    localStorage.setItem(SEEN_KEY, JSON.stringify([...seen].slice(-200)));
-  } catch {
-    /* noop */
-  }
-}
-
-const TYPE_STYLES: Record<
-  Announcement["type"],
-  { ring: string; icon: typeof Megaphone; label: string; chipBg: string; chipText: string; glow: string; gradient: string }
-> = {
-  info: {
-    ring: "ring-primary/30",
-    icon: Megaphone,
-    label: "公告",
-    chipBg: "bg-primary/15 border-primary/35",
-    chipText: "text-primary",
-    glow: "shadow-[0_0_120px_-30px_hsl(var(--primary)/0.7)]",
-    gradient: "from-primary/15 via-primary/5 to-transparent",
-  },
-  success: {
-    ring: "ring-emerald-400/30",
-    icon: CheckCircle2,
-    label: "新功能",
-    chipBg: "bg-emerald-400/15 border-emerald-400/35",
-    chipText: "text-emerald-300",
-    glow: "shadow-[0_0_120px_-30px_rgba(52,211,153,0.7)]",
-    gradient: "from-emerald-400/15 via-emerald-400/5 to-transparent",
-  },
-  warning: {
-    ring: "ring-amber-400/30",
-    icon: AlertTriangle,
-    label: "提醒",
-    chipBg: "bg-amber-400/15 border-amber-400/35",
-    chipText: "text-amber-300",
-    glow: "shadow-[0_0_120px_-30px_rgba(251,191,36,0.7)]",
-    gradient: "from-amber-400/15 via-amber-400/5 to-transparent",
-  },
-  promo: {
-    ring: "ring-fuchsia-400/30",
-    icon: Sparkles,
-    label: "活动",
-    chipBg: "bg-fuchsia-400/15 border-fuchsia-400/35",
-    chipText: "text-fuchsia-300",
-    glow: "shadow-[0_0_120px_-30px_rgba(232,121,249,0.7)]",
-    gradient: "from-fuchsia-400/15 via-fuchsia-400/5 to-transparent",
-  },
-};
-
-type Props = {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  /** Auto-open the newest unseen announcement once data is fetched. */
-  autoOpenLatest?: boolean;
-};
-
-/**
- * Premium announcement dialog. Renders a list of recent announcements with
- * the newest item expanded by default. Triggered automatically on login
- * when there is an unseen announcement, or manually via the bell icon.
- */
-export function AnnouncementCenter({ open, onOpenChange, autoOpenLatest = false }: Props) {
-  const fetchList = useServerFn(listAnnouncements);
-  const [items, setItems] = useState<Announcement[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [autoOpened, setAutoOpened] = useState(false);
-
-  // Fetch once
-  useEffect(() => {
-    let cancelled = false;
-    fetchList({})
-      .then((rows) => {
-        if (cancelled) return;
-        setItems(rows as Announcement[]);
-      })
-      .catch(() => {
-        /* silent: announcements are non-critical */
-      });
-    return () => {
-      cancelled = true;
+    const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "null") as Partial<MumoFrontendConfig> | null;
+    if (!saved) return DEFAULT_MUMO_FRONTEND_CONFIG;
+    return {
+      ...DEFAULT_MUMO_FRONTEND_CONFIG,
+      ...saved,
+      site: { ...DEFAULT_MUMO_FRONTEND_CONFIG.site, ...saved.site },
+      contact: { ...DEFAULT_MUMO_FRONTEND_CONFIG.contact, ...saved.contact },
+      redeem: { ...DEFAULT_MUMO_FRONTEND_CONFIG.redeem, ...saved.redeem },
+      announcements: Array.isArray(saved.announcements) ? saved.announcements : DEFAULT_MUMO_FRONTEND_CONFIG.announcements,
+      rechargePlans: Array.isArray(saved.rechargePlans) ? saved.rechargePlans : DEFAULT_MUMO_FRONTEND_CONFIG.rechargePlans,
+      models: Array.isArray(saved.models) ? saved.models : DEFAULT_MUMO_FRONTEND_CONFIG.models,
+      templates: Array.isArray(saved.templates) ? saved.templates : DEFAULT_MUMO_FRONTEND_CONFIG.templates,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  } catch {
+    return DEFAULT_MUMO_FRONTEND_CONFIG;
+  }
+}
+
+export function saveMumoFrontendConfig(config: MumoFrontendConfig) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  window.dispatchEvent(new Event(CONFIG_EVENT));
+}
+
+export function useMumoFrontendConfig() {
+  const [config, setConfig] = useState<MumoFrontendConfig>(readMumoFrontendConfig);
+
+  useEffect(() => {
+    const sync = () => setConfig(readMumoFrontendConfig());
+    window.addEventListener(CONFIG_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(CONFIG_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
   }, []);
 
-  // Auto-open the latest unseen one on mount (after fetch)
-  useEffect(() => {
-    if (!autoOpenLatest || autoOpened || items.length === 0) return;
-    const seen = readSeen();
-    const latest = items.find((a) => !seen.has(a.id));
-    if (latest) {
-      setActiveId(latest.id);
-      onOpenChange(true);
-      markSeen(latest.id);
-    }
-    setAutoOpened(true);
-  }, [items, autoOpenLatest, autoOpened, onOpenChange]);
+  const updateConfig = (next: MumoFrontendConfig) => {
+    saveMumoFrontendConfig(next);
+    setConfig(next);
+  };
 
-  // When opening manually, default-select the newest item
-  useEffect(() => {
-    if (open && !activeId && items.length > 0) setActiveId(items[0].id);
-    if (open && activeId) markSeen(activeId);
-  }, [open, activeId, items]);
+  return { config, updateConfig };
+}
 
-  const active = useMemo(() => items.find((a) => a.id === activeId) ?? items[0], [items, activeId]);
-  const style = active ? TYPE_STYLES[active.type] : TYPE_STYLES.info;
-  const Icon = style.icon;
+type Props = { open: boolean; onOpenChange: (open: boolean) => void; autoOpenLatest?: boolean };
+
+export function AnnouncementCenter({ open, onOpenChange }: Props) {
+  const { config } = useMumoFrontendConfig();
+  const announcements = config.announcements
+    .filter((item) => item.enabled)
+    .sort((left, right) => left.sortOrder - right.sortOrder);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className={`w-[calc(100vw-1rem)] max-w-5xl max-h-[calc(100dvh-1rem)] overflow-hidden border-border/60 bg-card/90 p-0 backdrop-blur-2xl ${style.glow}`}
-      >
-        <div className="grid max-h-[calc(100dvh-1rem)] min-h-0 grid-cols-1 md:grid-cols-[300px_1fr]">
-          {/* Sidebar list */}
-          <aside className="min-h-0 border-b border-border/60 bg-black/30 md:border-b-0 md:border-r">
-            <div className="flex items-center gap-2 px-4 py-3.5">
-              <Bell className="h-3.5 w-3.5 text-primary" />
-              <span className="text-xs font-semibold tracking-wide">通知中心</span>
-              <span className="ml-auto rounded bg-white/[0.06] px-1.5 py-px font-mono text-[10px] text-muted-foreground">
-                {items.length}
-              </span>
-            </div>
-            <div className="max-h-[26dvh] space-y-0.5 overflow-auto px-2 pb-3 md:max-h-[60vh]">
-              {items.length === 0 && (
-                <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">暂无通知</div>
-              )}
-              {items.map((a) => {
-                const s = TYPE_STYLES[a.type];
-                const SIcon = s.icon;
-                const isActive = active?.id === a.id;
-                return (
-                  <button
-                    key={a.id}
-                    onClick={() => setActiveId(a.id)}
-                    className={`group flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left transition-all ${
-                      isActive ? "bg-white/[0.06]" : "hover:bg-white/[0.03]"
-                    }`}
-                  >
-                    <div
-                      className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border ${s.chipBg}`}
-                    >
-                      <SIcon className={`h-3 w-3 ${s.chipText}`} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1">
-                        {a.is_pinned && <Pin className="h-2.5 w-2.5 text-primary" fill="currentColor" />}
-                        <p
-                          className={`truncate text-[11px] font-medium ${
-                            isActive ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
-                          }`}
-                        >
-                          {a.title}
-                        </p>
-                      </div>
-                      <p className="mt-0.5 truncate text-[10px] text-muted-foreground/70">
-                        {new Date(a.created_at).toLocaleDateString("zh-CN")}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </aside>
-
-          {/* Body */}
-          <div className="relative min-h-0">
-            {/* Top glow */}
-            <div
-              className={`pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b ${style.gradient}`}
-            />
-
-            <div className="relative max-h-[calc(74dvh-1rem)] overflow-auto px-4 py-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] md:max-h-[82vh] md:p-10">
-              {!active ? (
-                <div className="flex h-96 items-center justify-center text-xs text-muted-foreground">
-                  暂无通知
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${style.chipBg} ${style.chipText}`}
-                    >
-                      <Icon className="h-2.5 w-2.5" />
-                      {style.label}
-                    </span>
-                    {active.is_pinned && (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-primary/35 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                        <Pin className="h-2.5 w-2.5" fill="currentColor" />
-                        置顶
-                      </span>
-                    )}
-                    <span className="ml-auto font-mono text-[10px] text-muted-foreground/70">
-                      {new Date(active.created_at).toLocaleString("zh-CN")}
-                    </span>
-                  </div>
-
-                  <h2 className="text-2xl font-semibold leading-tight tracking-tight md:text-3xl">{active.title}</h2>
-
-                  {active.image_url && (
-                    <div className={`overflow-hidden rounded-2xl border border-border/60 ring-1 ${style.ring}`}>
-                      <img
-                        src={thumbUrl(active.image_url, { quality: 75 })}
-                        alt={active.title}
-                        className="max-h-[45dvh] w-full object-contain bg-black/40 md:max-h-[55vh]"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    </div>
-                  )}
-
-                  {active.content && (
-                    <div className="whitespace-pre-wrap text-[15px] leading-[1.8] text-foreground/90">
-                      {active.content}
-                    </div>
-                  )}
-
-                  {active.link_url && (
-                    <div className="pt-2">
-                      <a
-                        href={active.link_url}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="inline-flex items-center gap-1.5 rounded-full bg-gradient-aurora px-4 py-2 text-xs font-semibold text-primary-foreground shadow-glow transition-transform hover:scale-[1.03]"
-                      >
-                        {active.link_label || "查看详情"}
-                        <ArrowUpRight className="h-3.5 w-3.5" />
-                      </a>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+      <DialogContent className="max-w-lg border-white/70 bg-white/90 p-6 backdrop-blur-2xl dark:border-white/10 dark:bg-[#172231]/95">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Bell className="h-5 w-5 text-[#9a7d49]" />公告</DialogTitle>
+          <DialogDescription>莫沐AI 的近期动态</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 pt-2">
+          {announcements.map((item) => (
+            <article key={item.id} className="rounded-xl border border-slate-300/40 bg-white/50 p-3 dark:border-white/10 dark:bg-white/[0.04]">
+              <h3 className="text-sm font-medium text-slate-700 dark:text-slate-100">{item.title}</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{item.content}</p>
+            </article>
+          ))}
+          {announcements.length === 0 && <p className="py-8 text-center text-sm text-slate-400">暂无公告</p>}
         </div>
       </DialogContent>
     </Dialog>
