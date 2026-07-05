@@ -1,10 +1,11 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Bell, CreditCard, Gift, Headphones, History, Moon, Sun, Zap } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { UserMenu } from "@/components/auth/UserMenu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AnnouncementCenter, useMumoFrontendConfig } from "./AnnouncementCenter";
 import { AdBanner } from "./AdBanner";
+import { normalizeMumoRedeemCode, redeemMumoCode } from "@/lib/mumo-redeem-codes";
 
 const ContactDialog = lazy(() =>
   import("./ContactDialog").then((module) => ({ default: module.ContactDialog })),
@@ -19,6 +20,7 @@ type Props = {
 
 export function TopBar({ credits, onSwitchAccount, theme = "light", onToggleTheme }: Props) {
   const { config } = useMumoFrontendConfig();
+  const [displayCredits, setDisplayCredits] = useState(credits);
   const [contactOpen, setContactOpen] = useState(false);
   const [announcementsOpen, setAnnouncementsOpen] = useState(false);
   const [worksOpen, setWorksOpen] = useState(false);
@@ -27,17 +29,28 @@ export function TopBar({ credits, onSwitchAccount, theme = "light", onToggleThem
   const [redeemCode, setRedeemCode] = useState("");
   const [redeemMessage, setRedeemMessage] = useState("");
 
+  useEffect(() => setDisplayCredits(credits), [credits]);
+
   const validateRedeemCode = () => {
     const value = redeemCode.trim();
     if (!value) {
       setRedeemMessage("请输入兑换码");
       return;
     }
-    if (value.length < config.redeem.minLength) {
-      setRedeemMessage("兑换码格式不正确");
+    const result = redeemMumoCode(value, "当前用户");
+    if (!result.ok) {
+      const messages = {
+        format: "兑换码格式不正确",
+        missing: "兑换码不存在或已失效",
+        used: "该兑换码已被使用",
+        disabled: "该兑换码已失效",
+      } as const;
+      setRedeemMessage(messages[result.reason]);
       return;
     }
-    setRedeemMessage("兑换功能配置完成后开放");
+    setDisplayCredits((current) => current + result.credits);
+    setRedeemCode("");
+    setRedeemMessage(`兑换成功，已获得 ${result.credits.toLocaleString()} 创作点`);
   };
 
   return (
@@ -94,7 +107,7 @@ export function TopBar({ credits, onSwitchAccount, theme = "light", onToggleThem
         <div className="hidden h-7 w-px bg-slate-400/20 dark:bg-white/10 sm:block" />
         <div className="hidden shrink-0 items-center gap-1.5 rounded-full border border-white/70 bg-white/45 px-3 py-1.5 shadow-sm dark:border-white/10 dark:bg-white/[0.05] sm:flex">
           <Zap className="h-3.5 w-3.5 text-[#a4874f]" fill="currentColor" />
-          <span className="font-mono text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200">{credits.toLocaleString()}</span>
+          <span className="font-mono text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200">{displayCredits.toLocaleString()}</span>
           <span className="text-[9px] text-slate-400 dark:text-slate-500">创作点</span>
         </div>
         <UserMenu onSwitchAccount={onSwitchAccount} />
@@ -153,7 +166,7 @@ export function TopBar({ credits, onSwitchAccount, theme = "light", onToggleThem
             <input
               value={redeemCode}
               onChange={(event) => {
-                setRedeemCode(event.target.value);
+                setRedeemCode(normalizeMumoRedeemCode(event.target.value));
                 setRedeemMessage("");
               }}
               onKeyDown={(event) => {

@@ -20,7 +20,9 @@ import { AdminsPanel } from "./AdminsPanel";
 import { AccessGate } from "./AccessGate";
 import { AccessPasswordPanel } from "./AccessPasswordPanel";
 import { RechargePackagesPanel } from "./RechargePackagesPanel";
+import { RedeemCodesPanel } from "./RedeemCodesPanel";
 import { useMumoFrontendConfig } from "@/components/studio/AnnouncementCenter";
+import { useMumoRedeemCodes } from "@/lib/mumo-redeem-codes";
 
 type UserRow = { id: string; email: string | null; display_name: string | null; credits: number; created_at: string; total_spent: number; is_banned?: boolean };
 type CreditUsageLog = {
@@ -75,7 +77,7 @@ export function AdminDashboard({ open, onOpenChange, isFounder = false, previewB
             <TabsTrigger value="analytics" className="shrink-0 whitespace-nowrap gap-1.5"><LayoutDashboard className="h-3.5 w-3.5" />数据仪表盘</TabsTrigger>
             <TabsTrigger value="site" className="shrink-0 whitespace-nowrap gap-1.5"><Settings2 className="h-3.5 w-3.5" />站点与客服</TabsTrigger>
             <TabsTrigger value="users" className="shrink-0 whitespace-nowrap gap-1.5"><Users className="h-3.5 w-3.5" />用户管理</TabsTrigger>
-            <TabsTrigger value="coupons" className="shrink-0 whitespace-nowrap gap-1.5"><Ticket className="h-3.5 w-3.5" />兑换配置</TabsTrigger>
+            <TabsTrigger value="coupons" className="shrink-0 whitespace-nowrap gap-1.5"><Ticket className="h-3.5 w-3.5" />兑换码管理</TabsTrigger>
             <TabsTrigger value="recharge" className="shrink-0 whitespace-nowrap gap-1.5"><ShoppingBag className="h-3.5 w-3.5" />充值套餐</TabsTrigger>
             <TabsTrigger value="models" className="shrink-0 whitespace-nowrap gap-1.5"><Sparkles className="h-3.5 w-3.5" />模型配置</TabsTrigger>
             <TabsTrigger value="ads" className="shrink-0 whitespace-nowrap gap-1.5"><Megaphone className="h-3.5 w-3.5" />广告管理</TabsTrigger>
@@ -90,10 +92,10 @@ export function AdminDashboard({ open, onOpenChange, isFounder = false, previewB
             )}
           </TabsList>
           </div>
-          <TabsContent value="analytics" className="mt-4 max-h-[70vh] overflow-auto pr-1"><AnalyticsPanel /></TabsContent>
+          <TabsContent value="analytics" className="mt-4 max-h-[70vh] overflow-auto pr-1">{previewBypassAccess ? <PreviewAnalytics /> : <AnalyticsPanel />}</TabsContent>
           <TabsContent value="site" className="mt-4 max-h-[70vh] overflow-auto pr-1"><SiteAndContactConfigPanel /></TabsContent>
           <TabsContent value="users" className="mt-4"><UsersPanel /></TabsContent>
-          <TabsContent value="coupons" className="mt-4"><RedeemConfigPanel /></TabsContent>
+          <TabsContent value="coupons" className="mt-4 max-h-[70vh] space-y-4 overflow-auto pr-1"><RedeemCodesPanel /><RedeemConfigPanel /></TabsContent>
           <TabsContent value="recharge" className="mt-4"><RechargePackagesPanel /></TabsContent>
           <TabsContent value="models" className="mt-4"><CatalogConfigPanel kind="models" /></TabsContent>
           <TabsContent value="ads" className="mt-4"><AdsPanel /></TabsContent>
@@ -227,6 +229,36 @@ function ConfigCard({ title, description, children }: { title: string; descripti
 
 function ConfigField({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="block space-y-1 text-[11px] text-muted-foreground"><span>{label}</span>{children}</label>;
+}
+
+function PreviewAnalytics() {
+  const { records, refresh } = useMumoRedeemCodes();
+  const unused = records.filter((record) => record.status === "unused").length;
+  const used = records.filter((record) => record.status === "used").length;
+  const disabled = records.filter((record) => record.status === "disabled").length;
+  const metrics = [
+    { label: "本地兑换码", value: records.length },
+    { label: "未使用", value: unused },
+    { label: "已使用", value: used },
+    { label: "已禁用", value: disabled },
+  ];
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div><h3 className="text-sm font-medium">本地预览数据</h3><p className="mt-1 text-xs text-muted-foreground">统计来自当前浏览器，不会连接线上服务。</p></div>
+        <Button variant="outline" size="sm" onClick={refresh}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />刷新</Button>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="rounded-xl border border-border/60 bg-white/[0.03] p-4">
+            <p className="text-xs text-muted-foreground">{metric.label}</p>
+            <p className="mt-2 font-mono text-2xl font-semibold">{metric.value.toLocaleString()}</p>
+          </div>
+        ))}
+      </div>
+      <div className="rounded-xl border border-dashed border-border/70 py-10 text-center text-sm text-muted-foreground">更多运营统计将在服务开放后展示</div>
+    </section>
+  );
 }
 
 function UsersPanel() {
