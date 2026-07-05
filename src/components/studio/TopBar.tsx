@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Bell, CreditCard, Gift, Headphones, History, Moon, Sun, Zap } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { UserMenu } from "@/components/auth/UserMenu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AnnouncementCenter, useMumoFrontendConfig } from "./AnnouncementCenter";
@@ -50,7 +51,9 @@ export function TopBar({ credits, onSwitchAccount, theme = "light", onToggleThem
     }
     setDisplayCredits((current) => current + result.credits);
     setRedeemCode("");
-    setRedeemMessage(`兑换成功，已获得 ${result.credits.toLocaleString()} 创作点`);
+    setRedeemMessage("");
+    setRedeemOpen(false);
+    toast.success(`兑换成功，已获得 ${result.credits.toLocaleString()} 创作点`);
   };
 
   return (
