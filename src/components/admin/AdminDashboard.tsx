@@ -21,8 +21,9 @@ import { AccessGate } from "./AccessGate";
 import { AccessPasswordPanel } from "./AccessPasswordPanel";
 import { RechargePackagesPanel } from "./RechargePackagesPanel";
 import { RedeemCodesPanel } from "./RedeemCodesPanel";
-import { useMumoFrontendConfig } from "@/components/studio/AnnouncementCenter";
-import { useMumoRedeemCodes } from "@/lib/mumo-redeem-codes";
+import { ModelsPanel } from "./ModelsPanel";
+import { StyleTemplatesPanel } from "./StyleTemplatesPanel";
+import { adminGetGlobalConfig, adminUpdateGlobalConfig } from "@/lib/admin.functions";
 
 type UserRow = { id: string; email: string | null; display_name: string | null; credits: number; created_at: string; total_spent: number; is_banned?: boolean };
 type CreditUsageLog = {
@@ -97,10 +98,10 @@ export function AdminDashboard({ open, onOpenChange, isFounder = false, previewB
           <TabsContent value="users" className="mt-4"><UsersPanel /></TabsContent>
           <TabsContent value="coupons" className="mt-4 max-h-[70vh] space-y-4 overflow-auto pr-1"><RedeemCodesPanel /><RedeemConfigPanel /></TabsContent>
           <TabsContent value="recharge" className="mt-4"><RechargePackagesPanel /></TabsContent>
-          <TabsContent value="models" className="mt-4"><CatalogConfigPanel kind="models" /></TabsContent>
+          <TabsContent value="models" className="mt-4"><ModelsPanel /></TabsContent>
           <TabsContent value="ads" className="mt-4"><AdsPanel /></TabsContent>
           <TabsContent value="announcements" className="mt-4"><AnnouncementsPanel /></TabsContent>
-          <TabsContent value="styles" className="mt-4 max-h-[70vh] overflow-auto pr-1"><CatalogConfigPanel kind="templates" /></TabsContent>
+          <TabsContent value="styles" className="mt-4 max-h-[70vh] overflow-auto pr-1"><StyleTemplatesPanel /></TabsContent>
           <TabsContent value="works" className="mt-4"><WorksConfigPlaceholder /></TabsContent>
           {isFounder && <TabsContent value="admins" className="mt-4"><AdminsPanel /></TabsContent>}
           {isFounder && <TabsContent value="access" className="mt-4"><AccessPasswordPanel /></TabsContent>}
@@ -110,19 +111,21 @@ export function AdminDashboard({ open, onOpenChange, isFounder = false, previewB
   );
 }
 function SiteAndContactConfigPanel() {
-  const { config, updateConfig } = useMumoFrontendConfig();
-  const [site, setSite] = useState(config.site);
-  const [contact, setContact] = useState(config.contact);
+  const getConfig = useServerFn(adminGetGlobalConfig);
+  const updateConfig = useServerFn(adminUpdateGlobalConfig);
+  const [site, setSite] = useState({ brandName: "莫沐AI", logoPath: "/mumo-logo.png", subtitle: "MUMO AI VISUAL STUDIO" });
+  const [contact, setContact] = useState({ description: "", wechat: "", email: "", serviceHours: "", enabled: false });
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    setSite(config.site);
-    setContact(config.contact);
-  }, [config.site, config.contact]);
+  const load = async () => {
+    try { const value: any = await getConfig({}); if (value?.site) setSite((current) => ({ ...current, ...value.site })); if (value?.contact) setContact((current) => ({ ...current, ...value.contact })); }
+    catch (error: any) { toast.error(error.message || "后台数据服务未配置"); }
+  };
+  useEffect(() => { void load(); }, []);
 
-  const save = () => {
-    updateConfig({ ...config, site, contact });
-    setSaved(true);
+  const save = async () => {
+    try { await updateConfig({ data: { site, contact } }); setSaved(true); toast.success("站点与客服配置已保存"); }
+    catch (error: any) { toast.error(error.message || "保存失败"); }
   };
 
   return (
@@ -150,58 +153,26 @@ function SiteAndContactConfigPanel() {
 }
 
 function RedeemConfigPanel() {
-  const { config, updateConfig } = useMumoFrontendConfig();
-  const [redeem, setRedeem] = useState(config.redeem);
+  const getConfig = useServerFn(adminGetGlobalConfig);
+  const updateConfig = useServerFn(adminUpdateGlobalConfig);
+  const [redeem, setRedeem] = useState({ formatHint: "请输入 MUMO 兑换码", enabled: true });
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => setRedeem(config.redeem), [config.redeem]);
+  useEffect(() => { getConfig({}).then((value: any) => value?.redeem && setRedeem((current) => ({ ...current, ...value.redeem }))).catch((error: any) => toast.error(error.message || "后台数据服务未配置")); }, [getConfig]);
 
-  const save = () => {
-    updateConfig({ ...config, redeem });
-    setSaved(true);
+  const save = async () => {
+    try { await updateConfig({ data: { redeem } }); setSaved(true); toast.success("兑换配置已保存"); }
+    catch (error: any) { toast.error(error.message || "保存失败"); }
   };
 
   return (
     <ConfigCard title="兑换码配置" description="仅配置前台规则说明，不生成或校验真实兑换码。">
       <ConfigField label="兑换码格式说明"><Input value={redeem.formatHint} onChange={(event) => { setSaved(false); setRedeem({ ...redeem, formatHint: event.target.value }); }} /></ConfigField>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <ConfigField label="最短长度"><Input type="number" min={1} value={redeem.minLength} onChange={(event) => { setSaved(false); setRedeem({ ...redeem, minLength: Math.max(1, Number(event.target.value) || 1) }); }} /></ConfigField>
-        <ConfigField label="单码创作点"><Input type="number" min={0} value={redeem.creditsPerCode} onChange={(event) => { setSaved(false); setRedeem({ ...redeem, creditsPerCode: Math.max(0, Number(event.target.value) || 0) }); }} /></ConfigField>
-      </div>
       <label className="flex items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={redeem.enabled} onChange={(event) => { setSaved(false); setRedeem({ ...redeem, enabled: event.target.checked }); }} />启用兑换功能展示</label>
       <div className="flex items-center justify-end gap-3 pt-2">
         {saved && <span className="text-xs text-emerald-500">已保存到本地配置</span>}
         <Button onClick={save}><Save className="mr-1.5 h-3.5 w-3.5" />保存兑换配置</Button>
       </div>
-    </ConfigCard>
-  );
-}
-
-function CatalogConfigPanel({ kind }: { kind: "models" | "templates" }) {
-  const { config, updateConfig } = useMumoFrontendConfig();
-  const isModels = kind === "models";
-  const items = isModels ? config.models : config.templates;
-
-  const toggle = (index: number, enabled: boolean) => {
-    if (isModels) {
-      updateConfig({ ...config, models: config.models.map((item, itemIndex) => itemIndex === index ? { ...item, enabled } : item) });
-    } else {
-      updateConfig({ ...config, templates: config.templates.map((item, itemIndex) => itemIndex === index ? { ...item, enabled } : item) });
-    }
-  };
-
-  return (
-    <ConfigCard title={isModels ? "模型配置" : "模板配置"} description={isModels ? "前台模型列表后续从此配置读取。" : "模板灵感页面后续从此配置读取。"}>
-      {items.map((item, index) => (
-        <div key={`${item.name}-${index}`} className="flex items-center gap-3 rounded-xl border border-border/60 bg-white/[0.03] p-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">{item.name}</p>
-            <p className="mt-1 truncate text-xs text-muted-foreground">{"description" in item ? item.description : `${item.category} · ${item.prompt}`}</p>
-          </div>
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground"><input type="checkbox" checked={item.enabled} onChange={(event) => toggle(index, event.target.checked)} />启用</label>
-        </div>
-      ))}
-      <p className="text-xs text-muted-foreground">当前为本地配置占位，不会调用外部服务。</p>
     </ConfigCard>
   );
 }
@@ -232,21 +203,16 @@ function ConfigField({ label, children }: { label: string; children: React.React
 }
 
 function PreviewAnalytics() {
-  const { records, refresh } = useMumoRedeemCodes();
-  const unused = records.filter((record) => record.status === "unused").length;
-  const used = records.filter((record) => record.status === "used").length;
-  const disabled = records.filter((record) => record.status === "disabled").length;
   const metrics = [
-    { label: "本地兑换码", value: records.length },
-    { label: "未使用", value: unused },
-    { label: "已使用", value: used },
-    { label: "已禁用", value: disabled },
+    { label: "用户数量", value: 0 },
+    { label: "今日创作", value: 0 },
+    { label: "未使用兑换码", value: 0 },
+    { label: "作品数量", value: 0 },
   ];
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <div><h3 className="text-sm font-medium">本地预览数据</h3><p className="mt-1 text-xs text-muted-foreground">统计来自当前浏览器，不会连接线上服务。</p></div>
-        <Button variant="outline" size="sm" onClick={refresh}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />刷新</Button>
+        <div><h3 className="text-sm font-medium">后台预览</h3><p className="mt-1 text-xs text-muted-foreground">正式统计将在管理员身份验证后显示。</p></div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {metrics.map((metric) => (
@@ -448,7 +414,11 @@ function UsersPanel() {
           <ResetPwForm
             onSubmit={async (pw) => {
               if (!pwOpen) return;
-              try { await resetPw({ data: { userId: pwOpen.id, newPassword: pw } }); toast.success("密码已重置"); setPwOpen(null); }
+              try {
+                const result: any = await resetPw({ data: { userId: pwOpen.id, newPassword: pw } });
+                if (result?.ok === false) toast.info(result.message || "暂不支持在后台重置密码");
+                else { toast.success("密码已重置"); setPwOpen(null); }
+              }
               catch (e: any) { toast.error(e.message); }
             }}
           />
