@@ -45,15 +45,14 @@ type AdminDashboardProps = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   isFounder?: boolean;
-  previewBypassAccess?: boolean;
 };
 
-export function AdminDashboard({ open, onOpenChange, isFounder = false, previewBypassAccess = false }: AdminDashboardProps) {
+export function AdminDashboard({ open, onOpenChange, isFounder = false }: AdminDashboardProps) {
   const [unlocked, setUnlocked] = useState(false);
 
   useEffect(() => { if (!open) setUnlocked(false); }, [open]);
 
-  if (open && !previewBypassAccess && !unlocked) {
+  if (open && !unlocked) {
     return (
       <AccessGate
         open={open}
@@ -69,7 +68,7 @@ export function AdminDashboard({ open, onOpenChange, isFounder = false, previewB
         <DialogHeader className="border-b border-border/60 px-6 py-4">
           <DialogTitle className="flex items-center gap-2">
             {isFounder ? <Crown className="h-4 w-4 text-primary" /> : <Shield className="h-4 w-4 text-primary" />}
-            {previewBypassAccess ? "管理后台" : isFounder ? "\u521b\u59cb\u4eba\u540e\u53f0" : "\u7cfb\u7edf\u7ba1\u7406\u540e\u53f0"}
+            {isFounder ? "\u521b\u59cb\u4eba\u540e\u53f0" : "\u7cfb\u7edf\u7ba1\u7406\u540e\u53f0"}
           </DialogTitle>
         </DialogHeader>
         <Tabs defaultValue="analytics" className="min-w-0 px-6 pb-6 pt-4">
@@ -93,7 +92,7 @@ export function AdminDashboard({ open, onOpenChange, isFounder = false, previewB
             )}
           </TabsList>
           </div>
-          <TabsContent value="analytics" className="mt-4 max-h-[70vh] overflow-auto pr-1">{previewBypassAccess ? <PreviewAnalytics /> : <AnalyticsPanel />}</TabsContent>
+          <TabsContent value="analytics" className="mt-4 max-h-[70vh] overflow-auto pr-1"><AnalyticsPanel /></TabsContent>
           <TabsContent value="site" className="mt-4 max-h-[70vh] overflow-auto pr-1"><SiteAndContactConfigPanel /></TabsContent>
           <TabsContent value="users" className="mt-4"><UsersPanel /></TabsContent>
           <TabsContent value="coupons" className="mt-4 max-h-[70vh] space-y-4 overflow-auto pr-1"><RedeemCodesPanel /><RedeemConfigPanel /></TabsContent>

@@ -1,6 +1,6 @@
 import "@tanstack/react-start/server-only";
 import { getRequest } from "@tanstack/react-start/server";
-import { getSessionFromRequest, hashPassword, normalizeEmail } from "@/lib/auth";
+import { getSessionFromRequest, hashPassword, normalizeEmail, verifyPassword } from "@/lib/auth";
 import { getD1, type D1Database } from "@/lib/d1";
 
 type Input = Record<string, any>;
@@ -93,6 +93,17 @@ function parseAdminRole(value: unknown): AdminRole {
   return role;
 }
 
+function getStringInput(data: Input, key: string): string {
+  const direct = data[key];
+  if (typeof direct === "string") return direct;
+  const nested = data.data;
+  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+    const nestedValue = (nested as Input)[key];
+    if (typeof nestedValue === "string") return nestedValue;
+  }
+  return "";
+}
+
 async function countOwners(db: D1Database): Promise<number> {
   const row = await db.prepare("SELECT COUNT(*) AS value FROM admin_users WHERE role = 'owner'")
     .first<{ value: number }>();
@@ -128,26 +139,34 @@ export const checkIsAdmin = serverFn(async () => {
   }
 });
 
-export const verifyAdminAccessPassword = serverFn(async (data) => withAdmin(async ({ db }) => {
-  const setting = await getSetting(db, "admin_access_password", { password: "" });
-  const password = typeof setting === "object" && setting ? String((setting as { password?: unknown }).password ?? "") : "";
-  return { ok: password.length > 0 && String(data.password ?? "") === password };
-}));
+export const verifyAdminAccessPassword = serverFn(async (data) => {
+  try {
+    return await withAdmin(async ({ db, userId }) => {
+      const submittedPassword = getStringInput(data, "password");
+      if (!submittedPassword.trim()) throw new Error("invalid");
+
+      const user = await db.prepare("SELECT password_hash FROM users WHERE id = ? AND status = 'active' LIMIT 1")
+        .bind(userId)
+        .first<{ password_hash: string }>();
+      if (!user?.password_hash) throw new Error("invalid");
+      if (!(await verifyPassword(submittedPassword, user.password_hash))) throw new Error("invalid");
+
+      return { ok: true };
+    });
+  } catch {
+    throw new Error("管理员验证失败");
+  }
+});
 
 export const founderGetAccessPassword = serverFn(async () => withAdmin(async ({ db }) => {
-  const row = await db.prepare("SELECT value_json, updated_at FROM system_settings WHERE key = ? LIMIT 1")
+  const row = await db.prepare("SELECT updated_at FROM system_settings WHERE key = ? LIMIT 1")
     .bind("admin_access_password")
-    .first<{ value_json: string; updated_at: string }>();
-  const value = parseJson(row?.value_json, { password: "" });
-  return { password: String(value.password ?? ""), updated_at: row?.updated_at ?? null };
+    .first<{ updated_at: string }>();
+  return { configured: !!row, updated_at: row?.updated_at ?? null };
 }, true));
 
-export const founderSetAccessPassword = serverFn(async (data) => withAdmin(async ({ db, userId }) => {
-  const password = String(data.password ?? "").trim();
-  if (!password) throw new Error("密码不能为空");
-  // 上线前应替换为带盐的安全哈希验证，当前字段仅用于配置结构过渡。
-  await setSetting(db, "admin_access_password", { password }, userId);
-  return { ok: true };
+export const founderSetAccessPassword = serverFn(async () => withAdmin(async () => {
+  throw new Error("后台入口已改为管理员账号密码验证");
 }, true));
 
 export const adminGetAnalytics = serverFn(async () => withAdmin(async ({ db }) => {
@@ -509,8 +528,8 @@ export const removeAdminUser = serverFn(async (data) => withAdmin(async ({ db, u
 }, true));
 
 export const resetAdminUserPassword = serverFn(async (data) => withAdmin(async ({ db }) => {
-  const targetUserId = String(data.userId ?? "").trim();
-  const password = String(data.password ?? "").trim();
+  const targetUserId = getStringInput(data, "userId").trim();
+  const password = getStringInput(data, "password").trim();
   if (!targetUserId) throw new Error("管理员不存在");
   if (password.length < 8) throw new Error("密码至少 8 位");
   const role = await getAdminRoleByUserId(db, targetUserId);

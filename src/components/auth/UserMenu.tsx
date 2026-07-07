@@ -15,7 +15,6 @@ export function UserMenu({ onSwitchAccount }: { onSwitchAccount: () => void }) {
   const { user, profile, signOut, session } = useAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
-  const [adminPreview, setAdminPreview] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isFounder, setIsFounder] = useState(false);
   const check = useServerFn(checkIsAdmin);
@@ -87,14 +86,8 @@ export function UserMenu({ onSwitchAccount }: { onSwitchAccount: () => void }) {
             <DropdownMenuItem onSelect={() => setSettingsOpen(true)} className="cursor-pointer gap-2.5 rounded-md px-2.5 py-2 text-xs">
               <Settings className="h-3.5 w-3.5" /> 个人设置
             </DropdownMenuItem>
-            {!isAdmin && (
-              <DropdownMenuItem onSelect={() => { setAdminPreview(true); setAdminOpen(true); }} className="cursor-pointer gap-2.5 rounded-md px-2.5 py-2 text-xs text-primary focus:bg-primary/10">
-                <Shield className="h-3.5 w-3.5" />
-                管理后台
-              </DropdownMenuItem>
-            )}
             {isAdmin && (
-              <DropdownMenuItem onSelect={() => { setAdminPreview(false); setAdminOpen(true); }} className="cursor-pointer gap-2.5 rounded-md px-2.5 py-2 text-xs text-primary focus:bg-primary/10">
+              <DropdownMenuItem onSelect={() => setAdminOpen(true)} className="cursor-pointer gap-2.5 rounded-md px-2.5 py-2 text-xs text-primary focus:bg-primary/10">
                 {isFounder ? <Crown className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
                 {isFounder ? "创始人后台" : "管理员后台"}
               </DropdownMenuItem>
@@ -133,12 +126,8 @@ export function UserMenu({ onSwitchAccount }: { onSwitchAccount: () => void }) {
         <Suspense fallback={null}>
           <AdminDashboard
             open={adminOpen}
-            onOpenChange={(nextOpen) => {
-              setAdminOpen(nextOpen);
-              if (!nextOpen) setAdminPreview(false);
-            }}
-            isFounder={adminPreview ? false : isFounder}
-            previewBypassAccess={adminPreview}
+            onOpenChange={setAdminOpen}
+            isFounder={isFounder}
           />
         </Suspense>
       )}

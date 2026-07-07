@@ -21,6 +21,7 @@ import { Route as ApiAuthRegisterRouteImport } from './routes/api/auth/register'
 import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
+import { Route as ApiAdminVerifyAccessPasswordRouteImport } from './routes/api/admin/verify-access-password'
 
 const InspirationRoute = InspirationRouteImport.update({
   id: '/inspiration',
@@ -83,12 +84,19 @@ const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
   path: '/api/auth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAdminVerifyAccessPasswordRoute =
+  ApiAdminVerifyAccessPasswordRouteImport.update({
+    id: '/api/admin/verify-access-password',
+    path: '/api/admin/verify-access-password',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/disclaimer': typeof DisclaimerRoute
   '/inspiration': typeof InspirationRoute
   '/api/download-image': typeof ApiDownloadImageRoute
+  '/api/admin/verify-access-password': typeof ApiAdminVerifyAccessPasswordRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/me': typeof ApiAuthMeRoute
@@ -103,6 +111,7 @@ export interface FileRoutesByTo {
   '/disclaimer': typeof DisclaimerRoute
   '/inspiration': typeof InspirationRoute
   '/api/download-image': typeof ApiDownloadImageRoute
+  '/api/admin/verify-access-password': typeof ApiAdminVerifyAccessPasswordRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/me': typeof ApiAuthMeRoute
@@ -118,6 +127,7 @@ export interface FileRoutesById {
   '/disclaimer': typeof DisclaimerRoute
   '/inspiration': typeof InspirationRoute
   '/api/download-image': typeof ApiDownloadImageRoute
+  '/api/admin/verify-access-password': typeof ApiAdminVerifyAccessPasswordRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/me': typeof ApiAuthMeRoute
@@ -134,6 +144,7 @@ export interface FileRouteTypes {
     | '/disclaimer'
     | '/inspiration'
     | '/api/download-image'
+    | '/api/admin/verify-access-password'
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/me'
@@ -148,6 +159,7 @@ export interface FileRouteTypes {
     | '/disclaimer'
     | '/inspiration'
     | '/api/download-image'
+    | '/api/admin/verify-access-password'
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/me'
@@ -162,6 +174,7 @@ export interface FileRouteTypes {
     | '/disclaimer'
     | '/inspiration'
     | '/api/download-image'
+    | '/api/admin/verify-access-password'
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/me'
@@ -177,6 +190,7 @@ export interface RootRouteChildren {
   DisclaimerRoute: typeof DisclaimerRoute
   InspirationRoute: typeof InspirationRoute
   ApiDownloadImageRoute: typeof ApiDownloadImageRoute
+  ApiAdminVerifyAccessPasswordRoute: typeof ApiAdminVerifyAccessPasswordRoute
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthMeRoute: typeof ApiAuthMeRoute
@@ -273,6 +287,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/admin/verify-access-password': {
+      id: '/api/admin/verify-access-password'
+      path: '/api/admin/verify-access-password'
+      fullPath: '/api/admin/verify-access-password'
+      preLoaderRoute: typeof ApiAdminVerifyAccessPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -281,6 +302,7 @@ const rootRouteChildren: RootRouteChildren = {
   DisclaimerRoute: DisclaimerRoute,
   InspirationRoute: InspirationRoute,
   ApiDownloadImageRoute: ApiDownloadImageRoute,
+  ApiAdminVerifyAccessPasswordRoute: ApiAdminVerifyAccessPasswordRoute,
   ApiAuthLoginRoute: ApiAuthLoginRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthMeRoute: ApiAuthMeRoute,
