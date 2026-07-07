@@ -1,10 +1,11 @@
 import "@tanstack/react-start/server-only";
 import { getRequest } from "@tanstack/react-start/server";
-import { getSessionFromRequest, normalizeEmail } from "@/lib/auth";
+import { getSessionFromRequest, hashPassword, normalizeEmail } from "@/lib/auth";
 import { getD1, type D1Database } from "@/lib/d1";
 
 type Input = Record<string, any>;
 type AdminContext = { db: D1Database; userId: string; role: "owner" | "admin" };
+type AdminRole = "owner" | "admin";
 
 export function getD1ServerOnly(): D1Database {
   return getD1();
@@ -85,6 +86,25 @@ function boolInt(value: unknown, fallback = true) {
 }
 
 function makeId() { return crypto.randomUUID(); }
+
+function parseAdminRole(value: unknown): AdminRole {
+  const role = String(value ?? "admin").trim();
+  if (role !== "owner" && role !== "admin") throw new Error("管理员角色无效");
+  return role;
+}
+
+async function countOwners(db: D1Database): Promise<number> {
+  const row = await db.prepare("SELECT COUNT(*) AS value FROM admin_users WHERE role = 'owner'")
+    .first<{ value: number }>();
+  return Number(row?.value ?? 0);
+}
+
+async function getAdminRoleByUserId(db: D1Database, userId: string): Promise<AdminRole | null> {
+  const row = await db.prepare("SELECT role FROM admin_users WHERE user_id = ? LIMIT 1")
+    .bind(userId)
+    .first<{ role: AdminRole }>();
+  return row?.role ?? null;
+}
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function randomCodeGroup(length = 4) {
@@ -431,18 +451,87 @@ export const adminDeleteStyleTemplate = serverFn(async (data) => withAdmin(async
   await db.prepare("DELETE FROM style_templates WHERE id = ?").bind(String(data.id ?? "")).run(); return { ok: true };
 }));
 
-export const founderListAdmins = serverFn(async () => withAdmin(async ({ db }) => {
-  const rows = await db.prepare(`SELECT a.user_id, CASE WHEN a.role = 'owner' THEN 'founder' ELSE a.role END AS role,
-    u.email, u.display_name, a.created_at FROM admin_users a INNER JOIN users u ON u.id = a.user_id ORDER BY a.created_at`).all(); return rows.results ?? [];
+export const listAdminUsers = serverFn(async () => withAdmin(async ({ db }) => {
+  const rows = await db.prepare(`SELECT a.user_id, a.role, u.email, u.display_name, a.created_at, a.created_by
+    FROM admin_users a INNER JOIN users u ON u.id = a.user_id
+    ORDER BY CASE WHEN a.role = 'owner' THEN 0 ELSE 1 END, a.created_at`).all();
+  return rows.results ?? [];
 }, true));
-export const founderAddAdmin = serverFn(async (data) => withAdmin(async ({ db, userId }) => {
-  const user = await db.prepare("SELECT id FROM users WHERE email_normalized = ? LIMIT 1").bind(await normalizeEmailServerOnly(String(data.email ?? ""))).first<{ id: string }>();
-  if (!user) throw new Error("未找到该用户");
-  await db.prepare("INSERT OR IGNORE INTO admin_users (id, user_id, role, created_by) VALUES (?, ?, 'admin', ?)").bind(makeId(), user.id, userId).run(); return { ok: true };
+
+export const addAdminUserByEmail = serverFn(async (data) => withAdmin(async ({ db, userId }) => {
+  const email = String(data.email ?? "").trim();
+  if (!email) throw new Error("请输入邮箱");
+  const role = parseAdminRole(data.role ?? "admin");
+  const user = await db.prepare("SELECT id FROM users WHERE email_normalized = ? LIMIT 1")
+    .bind(await normalizeEmailServerOnly(email))
+    .first<{ id: string }>();
+  if (!user) throw new Error("请先让该邮箱注册账号");
+
+  await db.prepare(`INSERT INTO admin_users (id, user_id, role, created_by)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET role = excluded.role`)
+    .bind(makeId(), user.id, role, userId)
+    .run();
+  return { ok: true };
 }, true));
-export const founderRemoveAdmin = serverFn(async (data) => withAdmin(async ({ db }) => {
-  await db.prepare("DELETE FROM admin_users WHERE user_id = ? AND role = 'admin'").bind(String(data.userId ?? "")).run(); return { ok: true };
+
+export const updateAdminUserRole = serverFn(async (data) => withAdmin(async ({ db, userId: currentUserId }) => {
+  const targetUserId = String(data.userId ?? "").trim();
+  if (!targetUserId) throw new Error("管理员不存在");
+  const nextRole = parseAdminRole(data.role);
+  const currentRole = await getAdminRoleByUserId(db, targetUserId);
+  if (!currentRole) throw new Error("管理员不存在");
+  if (targetUserId === currentUserId && currentRole === "owner" && nextRole !== "owner") {
+    throw new Error("不能降低自己的 owner 权限");
+  }
+  if (currentRole === "owner" && nextRole !== "owner" && await countOwners(db) <= 1) {
+    throw new Error("至少保留一个 owner");
+  }
+
+  await db.prepare("UPDATE admin_users SET role = ? WHERE user_id = ?")
+    .bind(nextRole, targetUserId)
+    .run();
+  return { ok: true };
 }, true));
+
+export const removeAdminUser = serverFn(async (data) => withAdmin(async ({ db, userId: currentUserId }) => {
+  const targetUserId = String(data.userId ?? "").trim();
+  if (!targetUserId) throw new Error("管理员不存在");
+  if (targetUserId === currentUserId) throw new Error("不能移除自己");
+  const role = await getAdminRoleByUserId(db, targetUserId);
+  if (!role) throw new Error("管理员不存在");
+  if (role === "owner") throw new Error("不能直接移除 owner，请先将其改为 admin");
+
+  await db.prepare("DELETE FROM admin_users WHERE user_id = ? AND role = 'admin'")
+    .bind(targetUserId)
+    .run();
+  return { ok: true };
+}, true));
+
+export const resetAdminUserPassword = serverFn(async (data) => withAdmin(async ({ db }) => {
+  const targetUserId = String(data.userId ?? "").trim();
+  const password = String(data.password ?? "").trim();
+  if (!targetUserId) throw new Error("管理员不存在");
+  if (password.length < 8) throw new Error("密码至少 8 位");
+  const role = await getAdminRoleByUserId(db, targetUserId);
+  if (!role) throw new Error("管理员不存在");
+
+  const passwordHash = await hashPassword(password);
+  await db.batch([
+    db.prepare("UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .bind(passwordHash, targetUserId),
+    db.prepare("UPDATE sessions SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND revoked_at IS NULL")
+      .bind(targetUserId),
+  ]);
+  return { ok: true };
+}, true));
+
+export const founderListAdmins = serverFn(async (data) => {
+  const rows = await listAdminUsers(data);
+  return rows.map((row: any) => ({ ...row, role: row.role === "owner" ? "founder" : row.role }));
+});
+export const founderAddAdmin = serverFn(async (data) => addAdminUserByEmail({ ...data, role: "admin" }));
+export const founderRemoveAdmin = removeAdminUser;
 
 export const adminGetSystemPrompt = serverFn(async () => withAdmin(async ({ db }) => getSetting(db, "system_prompt", { prompt: "" })));
 export const adminSetSystemPrompt = serverFn(async (data) => withAdmin(async ({ db, userId }) => {

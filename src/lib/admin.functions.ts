@@ -333,6 +333,41 @@ export const adminDeleteStyleTemplate = createServerFn({ method: "POST" })
     return adminDeleteStyleTemplate(data);
   });
 
+export const listAdminUsers = createServerFn({ method: "POST" })
+  .inputValidator(inputValidator)
+  .handler(async ({ data }: { data: Input }) => {
+    const { listAdminUsers } = await import("@/lib/admin.server");
+    return listAdminUsers(data);
+  });
+
+export const addAdminUserByEmail = createServerFn({ method: "POST" })
+  .inputValidator(inputValidator)
+  .handler(async ({ data }: { data: Input }) => {
+    const { addAdminUserByEmail } = await import("@/lib/admin.server");
+    return addAdminUserByEmail(data);
+  });
+
+export const updateAdminUserRole = createServerFn({ method: "POST" })
+  .inputValidator(inputValidator)
+  .handler(async ({ data }: { data: Input }) => {
+    const { updateAdminUserRole } = await import("@/lib/admin.server");
+    return updateAdminUserRole(data);
+  });
+
+export const removeAdminUser = createServerFn({ method: "POST" })
+  .inputValidator(inputValidator)
+  .handler(async ({ data }: { data: Input }) => {
+    const { removeAdminUser } = await import("@/lib/admin.server");
+    return removeAdminUser(data);
+  });
+
+export const resetAdminUserPassword = createServerFn({ method: "POST" })
+  .inputValidator(inputValidator)
+  .handler(async ({ data }: { data: Input }) => {
+    const { resetAdminUserPassword } = await import("@/lib/admin.server");
+    return resetAdminUserPassword(data);
+  });
+
 export const founderListAdmins = createServerFn({ method: "POST" })
   .inputValidator(inputValidator)
   .handler(async ({ data }: { data: Input }) => {
