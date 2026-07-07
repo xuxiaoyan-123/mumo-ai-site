@@ -17,6 +17,7 @@ export const Route = createFileRoute("/api/auth/register")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        let stage = "parse_body";
         let body: CredentialsBody;
         try {
           const parsed = await request.json() as unknown;
@@ -35,17 +36,23 @@ export const Route = createFileRoute("/api/auth/register")({
         if (password.length < 8) return apiError("WEAK_PASSWORD", "Password must be at least 8 characters", 400);
 
         try {
+          stage = "get_d1";
           const db = getD1();
+          stage = "check_existing_user";
           const existing = await db.prepare("SELECT id FROM users WHERE email_normalized = ? LIMIT 1")
             .bind(emailNormalized)
             .first<{ id: string }>();
           if (existing) return apiError("EMAIL_ALREADY_REGISTERED", "Email is already registered", 409);
 
           const userId = crypto.randomUUID();
+          stage = "hash_password";
           const passwordHash = await hashPassword(password);
+          stage = "load_signup_bonus";
           const bonusCredits = await getSignupBonusCredits(db);
+          stage = "create_session";
           const session = await createStoredSession(db, userId, request);
 
+          stage = "write_registration_batch";
           const results = await db.batch([
             db.prepare(
               "INSERT INTO users (id, email, email_normalized, password_hash) VALUES (?, ?, ?, ?)",
@@ -66,7 +73,9 @@ export const Route = createFileRoute("/api/auth/register")({
             ),
             session.statement,
           ]);
-          if (results.some((result) => !result.success)) throw new Error("Registration transaction failed");
+          if (results.some((result) => result && result.success === false)) {
+            throw new Error("Registration transaction failed");
+          }
 
           return jsonResponse(
             {
@@ -82,7 +91,7 @@ export const Route = createFileRoute("/api/auth/register")({
           if (message.toLowerCase().includes("unique")) {
             return apiError("EMAIL_ALREADY_REGISTERED", "Email is already registered", 409);
           }
-          console.error("Registration failed", error);
+          console.error("Registration failed", { stage, error });
           return apiError("REGISTRATION_UNAVAILABLE", "Registration is temporarily unavailable", 503);
         }
       },

@@ -2,7 +2,7 @@ import { getD1, type D1Database } from "@/lib/d1";
 
 const PASSWORD_ALGORITHM = "PBKDF2";
 const PASSWORD_DIGEST = "SHA-256";
-const PASSWORD_ITERATIONS = 210_000;
+const PASSWORD_ITERATIONS = 100_000;
 const PASSWORD_KEY_BYTES = 32;
 const PASSWORD_SALT_BYTES = 16;
 const SESSION_TOKEN_BYTES = 32;
@@ -55,6 +55,13 @@ function bytesToBase64Url(bytes: Uint8Array): string {
   return bytesToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+function joinBytes(left: Uint8Array, right: Uint8Array): Uint8Array {
+  const result = new Uint8Array(left.length + right.length);
+  result.set(left);
+  result.set(right, left.length);
+  return result;
+}
+
 function constantTimeEqual(left: Uint8Array, right: Uint8Array): boolean {
   if (left.length !== right.length) return false;
   let mismatch = 0;
@@ -66,26 +73,51 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+async function hashSaltedSha256(password: string, salt = crypto.getRandomValues(new Uint8Array(PASSWORD_SALT_BYTES))): Promise<string> {
+  const passwordBytes = new TextEncoder().encode(password);
+  const digest = await crypto.subtle.digest(PASSWORD_DIGEST, joinBytes(salt, passwordBytes));
+  return `sha256_salted$1$${bytesToBase64(salt)}$${bytesToBase64(new Uint8Array(digest))}`;
+}
+
 export async function hashPassword(password: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(PASSWORD_SALT_BYTES));
-  const material = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(password),
-    { name: PASSWORD_ALGORITHM },
-    false,
-    ["deriveBits"],
-  );
-  const bits = await crypto.subtle.deriveBits(
-    { name: PASSWORD_ALGORITHM, hash: PASSWORD_DIGEST, iterations: PASSWORD_ITERATIONS, salt },
-    material,
-    PASSWORD_KEY_BYTES * 8,
-  );
-  return `pbkdf2_sha256$${PASSWORD_ITERATIONS}$${bytesToBase64(salt)}$${bytesToBase64(new Uint8Array(bits))}`;
+  try {
+    const material = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(password),
+      { name: PASSWORD_ALGORITHM },
+      false,
+      ["deriveBits"],
+    );
+    const bits = await crypto.subtle.deriveBits(
+      { name: PASSWORD_ALGORITHM, hash: PASSWORD_DIGEST, iterations: PASSWORD_ITERATIONS, salt },
+      material,
+      PASSWORD_KEY_BYTES * 8,
+    );
+    return `pbkdf2_sha256$${PASSWORD_ITERATIONS}$${bytesToBase64(salt)}$${bytesToBase64(new Uint8Array(bits))}`;
+  } catch (error) {
+    console.error("PBKDF2 password hashing unavailable; using salted SHA-256 fallback", error);
+    return hashSaltedSha256(password, salt);
+  }
 }
 
 export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
   const parts = storedHash.split("$");
-  if (parts.length !== 4 || parts[0] !== "pbkdf2_sha256") return false;
+  if (parts.length !== 4) return false;
+
+  if (parts[0] === "sha256_salted") {
+    try {
+      const salt = base64ToBytes(parts[2]);
+      const expected = base64ToBytes(parts[3]);
+      const candidateHash = await hashSaltedSha256(password, salt);
+      const candidate = base64ToBytes(candidateHash.split("$")[3] ?? "");
+      return expected.length > 0 && constantTimeEqual(candidate, expected);
+    } catch {
+      return false;
+    }
+  }
+
+  if (parts[0] !== "pbkdf2_sha256") return false;
 
   const iterations = Number(parts[1]);
   if (!Number.isSafeInteger(iterations) || iterations < 100_000 || iterations > 1_000_000) return false;
