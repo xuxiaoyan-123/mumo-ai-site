@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, PlayCircle, ShieldCheck, Sparkles } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 
 type Mode = "login" | "register" | "reset";
 
@@ -27,6 +28,7 @@ type AuthModalProps = {
 };
 
 export function AuthModal({ onSuccess, onPreview }: AuthModalProps) {
+  const { refreshProfile } = useAuth();
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -63,7 +65,10 @@ export function AuthModal({ onSuccess, onPreview }: AuthModalProps) {
       });
       const payload = (await response.json().catch(() => ({}))) as { message?: string };
       setMessage(payload.message ?? (response.ok ? "操作完成" : "账号服务暂不可用，请稍后再试"));
-      if (response.ok && mode !== "reset") onSuccess?.();
+      if (response.ok && mode !== "reset") {
+        await refreshProfile();
+        onSuccess?.();
+      }
     } catch {
       setMessage("账号服务暂不可用，请稍后再试。");
     } finally {
