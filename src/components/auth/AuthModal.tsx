@@ -64,11 +64,17 @@ export function AuthModal({ onSuccess, onPreview }: AuthModalProps) {
         body: JSON.stringify(mode === "reset" ? { email: normalizedEmail } : { email: normalizedEmail, password }),
       });
       const payload = (await response.json().catch(() => ({}))) as { message?: string };
-      setMessage(payload.message ?? (response.ok ? "操作完成" : "账号服务暂不可用，请稍后再试"));
-      if (response.ok && mode !== "reset") {
-        await refreshProfile();
-        onSuccess?.();
+      if (!response.ok) {
+        setMessage(payload.message ?? "账号服务暂不可用，请稍后再试");
+        return;
       }
+      if (mode === "reset") {
+        setMessage(payload.message ?? "找回指引已提交");
+        return;
+      }
+      setMessage("");
+      await refreshProfile();
+      onSuccess?.();
     } catch {
       setMessage("账号服务暂不可用，请稍后再试。");
     } finally {
