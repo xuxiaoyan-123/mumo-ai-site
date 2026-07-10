@@ -305,23 +305,46 @@ export const adminDeleteAnnouncement = serverFn(async (data) => withAdmin(async 
 }));
 
 export const listVisibleRechargePackages = serverFn(async () => withDb(async (db) => {
-  const rows = await db.prepare("SELECT id, name, credits, price_text, badge, description, sort_order, buy_url FROM recharge_packages WHERE is_enabled = 1 ORDER BY sort_order, created_at").all();
+  const rows = await db.prepare(`SELECT id, name, credits, price_text, badge, description, button_text,
+    is_popular, is_highlighted, benefits_text, sort_order, buy_url
+    FROM recharge_packages WHERE is_enabled = 1 ORDER BY sort_order, created_at`).all();
   return rows.results ?? [];
 }), "GET");
 
 export const listAdminRechargePackages = serverFn(async () => withAdmin(async ({ db }) => {
-  const rows = await db.prepare("SELECT id, name, credits, price_text, badge, description, sort_order, is_enabled, buy_url, created_at, updated_at FROM recharge_packages ORDER BY sort_order, created_at").all();
+  const rows = await db.prepare(`SELECT id, name, credits, price_text, badge, description, button_text,
+    is_popular, is_highlighted, benefits_text, sort_order, is_enabled, buy_url, created_at, updated_at
+    FROM recharge_packages ORDER BY sort_order, created_at`).all();
   return rows.results ?? [];
 }));
 
 export const upsertAdminRechargePackage = serverFn(async (data) => withAdmin(async ({ db }) => {
   const id = String(data.id ?? makeId());
-  await db.prepare(`INSERT INTO recharge_packages (id, name, credits, price_text, badge, description, sort_order, is_enabled, buy_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  await db.prepare(`INSERT INTO recharge_packages (
+      id, name, credits, price_text, badge, description, button_text, is_popular,
+      is_highlighted, benefits_text, sort_order, is_enabled, buy_url
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET name = excluded.name, credits = excluded.credits, price_text = excluded.price_text,
-      badge = excluded.badge, description = excluded.description, sort_order = excluded.sort_order,
+      badge = excluded.badge, description = excluded.description, button_text = excluded.button_text,
+      is_popular = excluded.is_popular, is_highlighted = excluded.is_highlighted,
+      benefits_text = excluded.benefits_text, sort_order = excluded.sort_order,
       is_enabled = excluded.is_enabled, buy_url = excluded.buy_url, updated_at = CURRENT_TIMESTAMP`)
-    .bind(id, String(data.name ?? data.title ?? "").trim(), Math.max(0, Number(data.credits ?? 0)), String(data.price_text ?? data.price ?? "").trim(), data.badge ?? data.badgeText ?? null, data.description ?? data.subtitle ?? null, Number(data.sort_order ?? data.sortOrder ?? 0), boolInt(data.is_enabled ?? data.isVisible), data.buy_url ?? null)
+    .bind(
+      id,
+      String(data.name ?? data.title ?? "").trim(),
+      Math.max(0, Number(data.credits ?? 0)),
+      String(data.price_text ?? data.price ?? "").trim(),
+      String(data.badge ?? data.badgeText ?? "").trim() || null,
+      String(data.description ?? data.subtitle ?? "").trim() || null,
+      String(data.button_text ?? data.buttonText ?? "前往购买").trim() || "前往购买",
+      boolInt(data.is_popular ?? data.isPopular),
+      boolInt(data.is_highlighted ?? data.isHighlighted),
+      String(data.benefits_text ?? data.benefitsText ?? "").trim() || null,
+      Number(data.sort_order ?? data.sortOrder ?? 0),
+      boolInt(data.is_enabled ?? data.isVisible),
+      String(data.buy_url ?? "").trim() || null,
+    )
     .run();
   return { id };
 }));

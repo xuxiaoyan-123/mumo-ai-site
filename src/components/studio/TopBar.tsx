@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Bell, CreditCard, Gift, Headphones, History, Moon, Sun, Zap } from "lucide-react";
+import { Bell, Check, CreditCard, Gift, Headphones, History, Moon, Sparkles, Sun, Zap } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { UserMenu } from "@/components/auth/UserMenu";
@@ -24,7 +24,19 @@ type Props = {
 };
 
 type SiteConfig = { brandName: string; logoPath: string; subtitle: string };
-type RechargePackage = { id: string; name: string; credits: number; price_text: string; badge: string | null; description: string | null; buy_url: string | null };
+type RechargePackage = {
+  id: string;
+  name: string;
+  credits: number;
+  price_text: string;
+  badge: string | null;
+  description: string | null;
+  button_text: string | null;
+  is_popular: number;
+  is_highlighted: number;
+  benefits_text: string | null;
+  buy_url: string | null;
+};
 const DEFAULT_SITE: SiteConfig = { brandName: "沐莫AI", logoPath: "/mumo-logo.png", subtitle: "MUMO AI VISUAL STUDIO" };
 
 export function TopBar({ credits, onSwitchAccount, theme = "light", onToggleTheme }: Props) {
@@ -144,24 +156,58 @@ export function TopBar({ credits, onSwitchAccount, theme = "light", onToggleThem
       )}
 
       <Dialog open={rechargeOpen} onOpenChange={setRechargeOpen}>
-        <DialogContent className="max-w-2xl border-white/70 bg-white/90 p-6 shadow-[0_24px_70px_-38px_rgba(30,41,59,.45)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#172231]/95">
+        <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto border-white/70 bg-white/95 p-5 shadow-[0_24px_70px_-38px_rgba(30,41,59,.45)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#172231]/95 md:p-7">
           <DialogHeader>
             <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-2xl border border-[#c5a96f]/25 bg-[#e7d9bb]/25 text-[#8d7344] dark:border-[#d2ba86]/20 dark:bg-[#d2ba86]/10 dark:text-[#d8c18f]">
               <CreditCard className="h-5 w-5" />
             </div>
-            <DialogTitle className="text-lg text-slate-900 dark:text-slate-100">购买兑换码</DialogTitle>
-            <DialogDescription className="pt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">选择套餐后前往管理员配置的第三方页面购买兑换码。</DialogDescription>
+            <DialogTitle className="text-xl text-slate-900 dark:text-slate-100">购买兑换码</DialogTitle>
+            <DialogDescription className="pt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">选择适合的创作点套餐，前往管理员配置的第三方发卡平台购买兑换码。</DialogDescription>
           </DialogHeader>
-          <div className="mt-2 grid gap-3 sm:grid-cols-3">
+          <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {packages.map((plan) => (
-              <div key={plan.id} className="relative rounded-2xl border border-slate-300/45 bg-white/55 p-4 dark:border-white/10 dark:bg-white/[0.04]">
-                {plan.badge && <span className="absolute right-3 top-3 rounded-full bg-[#e7d9bb]/55 px-2 py-0.5 text-[9px] text-[#806a43] dark:bg-[#d2ba86]/10 dark:text-[#d8c18f]">{plan.badge}</span>}
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{plan.name}</p>
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{plan.credits.toLocaleString()} 创作点</p>
-                <p className="mt-3 font-mono text-xl font-semibold text-slate-800 dark:text-slate-100">{plan.price_text}</p>
-                {plan.description && <p className="mt-2 text-xs text-slate-400">{plan.description}</p>}
-                <button type="button" onClick={() => openPurchase(plan.buy_url)} className="mt-4 h-9 w-full rounded-xl bg-slate-800 text-xs font-medium text-white dark:bg-slate-200 dark:text-slate-900">
-                  前往购买兑换码
+              <div
+                key={plan.id}
+                className={`relative flex min-h-[360px] flex-col overflow-hidden rounded-2xl border p-5 transition-transform hover:-translate-y-0.5 ${
+                  Number(plan.is_highlighted) === 1
+                    ? "border-[#b89657]/55 bg-gradient-to-b from-[#f7eedb]/75 to-white/80 shadow-[0_18px_45px_-28px_rgba(146,111,50,.75)] dark:border-[#d2ba86]/35 dark:from-[#352f24]/75 dark:to-white/[0.045]"
+                    : "border-slate-300/45 bg-white/60 shadow-sm dark:border-white/10 dark:bg-white/[0.04]"
+                }`}
+              >
+                <div className="flex min-h-7 flex-wrap items-start gap-2">
+                  {Number(plan.is_popular) === 1 && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-semibold text-white dark:bg-[#d8c18f] dark:text-slate-950">
+                      <Sparkles className="h-3 w-3" />最受欢迎
+                    </span>
+                  )}
+                  {plan.badge && <span className="rounded-full border border-[#c5a96f]/30 bg-[#e7d9bb]/45 px-2.5 py-1 text-[10px] font-medium text-[#806a43] dark:border-[#d2ba86]/20 dark:bg-[#d2ba86]/10 dark:text-[#d8c18f]">{plan.badge}</span>}
+                </div>
+                <p className="mt-4 text-lg font-semibold text-slate-900 dark:text-slate-100">{plan.name}</p>
+                {plan.description && <p className="mt-1 min-h-10 text-xs leading-5 text-slate-500 dark:text-slate-400">{plan.description}</p>}
+                <p className="mt-5 font-mono text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">{plan.price_text}</p>
+                <div className="mt-3 rounded-xl border border-slate-300/40 bg-white/55 px-3 py-2.5 dark:border-white/10 dark:bg-black/10">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-slate-400">创作点</p>
+                  <p className="mt-0.5 font-mono text-lg font-semibold text-slate-800 dark:text-slate-100">{Number(plan.credits ?? 0).toLocaleString()}</p>
+                </div>
+                <ul className="mt-4 flex-1 space-y-2.5">
+                  {getPackageBenefits(plan).map((benefit) => (
+                    <li key={benefit} className="flex items-start gap-2 text-xs leading-5 text-slate-600 dark:text-slate-300">
+                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#a8894f] dark:text-[#d8c18f]" />
+                      <span>{benefit}</span>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => openPurchase(plan.buy_url)}
+                  aria-disabled={!hasValidBuyLink(plan.buy_url)}
+                  className={`mt-5 h-10 w-full rounded-xl text-xs font-semibold transition-colors ${
+                    hasValidBuyLink(plan.buy_url)
+                      ? "bg-slate-900 text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
+                      : "border border-slate-300/60 bg-slate-100 text-slate-400 hover:bg-slate-200 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-500"
+                  }`}
+                >
+                  {hasValidBuyLink(plan.buy_url) ? (plan.button_text?.trim() || "前往购买") : "暂未配置"}
                 </button>
               </div>
             ))}
@@ -256,4 +302,16 @@ function NavLinkTo({ to, children }: { to: "/" | "/inspiration"; children: React
       {children}
     </Link>
   );
+}
+
+function hasValidBuyLink(url: string | null) {
+  return Boolean(url && /^https?:\/\//i.test(url));
+}
+
+function getPackageBenefits(plan: RechargePackage) {
+  const benefits = String(plan.benefits_text ?? "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return benefits.length > 0 ? benefits : [`兑换后获得 ${Number(plan.credits ?? 0).toLocaleString()} 创作点`];
 }
