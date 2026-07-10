@@ -25,7 +25,7 @@ type Props = {
 
 type SiteConfig = { brandName: string; logoPath: string; subtitle: string };
 type RechargePackage = { id: string; name: string; credits: number; price_text: string; badge: string | null; description: string | null; buy_url: string | null };
-const DEFAULT_SITE: SiteConfig = { brandName: "莫沐AI", logoPath: "/mumo-logo.png", subtitle: "MUMO AI VISUAL STUDIO" };
+const DEFAULT_SITE: SiteConfig = { brandName: "沐莫AI", logoPath: "/mumo-logo.png", subtitle: "MUMO AI VISUAL STUDIO" };
 
 export function TopBar({ credits, onSwitchAccount, theme = "light", onToggleTheme }: Props) {
   const fetchConfig = useServerFn(getGlobalConfig);

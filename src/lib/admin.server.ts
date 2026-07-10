@@ -430,7 +430,7 @@ export const adminGetGlobalConfig = serverFn(async () => withAdmin(async ({ db }
   redeem: await getSetting(db, "redeem_config", {}),
 })));
 export const getGlobalConfig = serverFn(async () => withDb(async (db) => ({
-  site: await getSetting(db, "site_brand", { brandName: "莫沐AI", logoPath: "/mumo-logo.png", subtitle: "MUMO AI VISUAL STUDIO" }),
+  site: await getSetting(db, "site_brand", { brandName: "沐莫AI", logoPath: "/mumo-logo.png", subtitle: "MUMO AI VISUAL STUDIO" }),
   contact: await getSetting(db, "contact_info", {}),
   purchase: await getSetting(db, "recharge_purchase_config", {}),
   redeem: await getSetting(db, "redeem_config", {}),

@@ -112,7 +112,7 @@ export function AdminDashboard({ open, onOpenChange, isFounder = false }: AdminD
 function SiteAndContactConfigPanel() {
   const getConfig = useServerFn(adminGetGlobalConfig);
   const updateConfig = useServerFn(adminUpdateGlobalConfig);
-  const [site, setSite] = useState({ brandName: "莫沐AI", logoPath: "/mumo-logo.png", subtitle: "MUMO AI VISUAL STUDIO" });
+  const [site, setSite] = useState({ brandName: "沐莫AI", logoPath: "/mumo-logo.png", subtitle: "MUMO AI VISUAL STUDIO" });
   const [contact, setContact] = useState({ description: "", wechat: "", email: "", serviceHours: "", enabled: false });
   const [saved, setSaved] = useState(false);
 

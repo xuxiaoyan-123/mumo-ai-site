@@ -8,7 +8,7 @@ export function TopNav() {
           <Sparkles className="h-4 w-4 text-primary-foreground" strokeWidth={2.5} />
         </div>
         <div className="font-display text-base font-semibold tracking-tight">
-          莫沐AI<span className="text-gradient-aurora"> · </span>Mumo
+          沐莫AI<span className="text-gradient-aurora"> · </span>Mumo
         </div>
         <nav className="ml-6 hidden items-center gap-1 text-xs text-muted-foreground md:flex">
           <a className="rounded-md px-2.5 py-1.5 text-foreground/90 transition-colors hover:bg-white/5">Create</a>
