@@ -1,19 +1,29 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot,
-  ChevronDown,
+  Cpu,
   Eraser,
   ImagePlus,
   Images,
-  Maximize2,
-  MonitorUp,
   RefreshCw,
-  SlidersHorizontal,
   Sparkles,
   Trash2,
   WandSparkles,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ModelPicker } from "./ModelPicker";
+import { ParameterPicker } from "./ParameterPicker";
+import {
+  ASPECT_RATIO_OPTIONS,
+  DEFAULT_GENERATION_PARAMETERS,
+  QUALITY_OPTIONS,
+  getModelOption,
+  type GenerationParameters,
+  type GenerationPrefill,
+  type GenerationSubmission,
+} from "./generation-options";
+import { usePortalTheme } from "./usePortalTheme";
 
 export type GenProgress = {
   stage: "submitting" | "queued" | "rendering" | "polling";
@@ -25,6 +35,17 @@ export type GenProgress = {
   renderBudget?: number;
 };
 
+export type ControlPanelProps = {
+  credits: number;
+  generating: boolean;
+  retryPrefill: GenerationPrefill | null;
+  reusePrefill: GenerationPrefill | null;
+  referenceResetToken: number;
+  onGenerateStart: (submission: GenerationSubmission) => void;
+};
+
+type OpenPicker = "model" | "ratio" | "quality" | null;
+
 const MAX_REFERENCE_IMAGES = 5;
 
 const promptIdeas = [
@@ -33,45 +54,78 @@ const promptIdeas = [
   "轻奢美妆主图，银灰蓝背景，细腻光影，通透材质，高级陈列",
 ];
 
-export function ControlPanel(_props: Record<string, unknown>) {
+function getReferenceSlots(urls: string[] = []) {
+  return Array.from(
+    { length: MAX_REFERENCE_IMAGES },
+    (_, index): string | null => urls[index] ?? null,
+  );
+}
+
+export function ControlPanel({
+  credits,
+  generating,
+  retryPrefill,
+  reusePrefill,
+  referenceResetToken,
+  onGenerateStart,
+}: ControlPanelProps) {
   const [prompt, setPrompt] = useState("");
-  const credits = typeof _props.credits === "number" ? _props.credits : 0;
-  const [referenceImages, setReferenceImages] = useState<Array<string | null>>(
-    () => Array.from({ length: MAX_REFERENCE_IMAGES }, () => null),
+  const [parameters, setParameters] = useState<GenerationParameters>(DEFAULT_GENERATION_PARAMETERS);
+  const [openPicker, setOpenPicker] = useState<OpenPicker>(null);
+  const [referenceImages, setReferenceImages] = useState<Array<string | null>>(() =>
+    getReferenceSlots(),
   );
   const objectUrlsRef = useRef(new Set<string>());
-  const charCount = useMemo(() => prompt.length, [prompt]);
+  const { anchorRef: panelRef, darkMode } = usePortalTheme<HTMLElement>();
+  const charCount = prompt.length;
   const referenceCount = referenceImages.filter(Boolean).length;
+  const selectedModel = getModelOption(parameters.model);
+  const selectedRatio =
+    ASPECT_RATIO_OPTIONS.find((option) => option.value === parameters.aspectRatio) ??
+    ASPECT_RATIO_OPTIONS[1];
+  const selectedQuality =
+    QUALITY_OPTIONS.find((option) => option.value === parameters.quality) ?? QUALITY_OPTIONS[1];
+  const activePrefill = useMemo(() => {
+    if (!retryPrefill) return reusePrefill;
+    if (!reusePrefill) return retryPrefill;
+    return retryPrefill.nonce >= reusePrefill.nonce ? retryPrefill : reusePrefill;
+  }, [retryPrefill, reusePrefill]);
+
+  const releaseObjectUrls = useCallback(() => {
+    objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    objectUrlsRef.current.clear();
+  }, []);
+
+  const replaceReferenceImages = useCallback(
+    (urls: string[] = []) => {
+      releaseObjectUrls();
+      setReferenceImages(getReferenceSlots(urls.slice(0, MAX_REFERENCE_IMAGES)));
+    },
+    [releaseObjectUrls],
+  );
+
+  useEffect(() => releaseObjectUrls, [releaseObjectUrls]);
 
   useEffect(() => {
-    const objectUrls = objectUrlsRef.current;
-    return () => {
-      objectUrls.forEach((url) => URL.revokeObjectURL(url));
-      objectUrls.clear();
-    };
-  }, []);
+    replaceReferenceImages();
+  }, [referenceResetToken, replaceReferenceImages]);
+
+  useEffect(() => {
+    if (!activePrefill) return;
+    setPrompt(activePrefill.prompt.slice(0, 1000));
+    setParameters(activePrefill.parameters);
+    replaceReferenceImages(activePrefill.referenceImages);
+  }, [activePrefill, replaceReferenceImages]);
 
   const useRandomPrompt = () => {
     const currentIndex = promptIdeas.indexOf(prompt);
     setPrompt(promptIdeas[(currentIndex + 1 + promptIdeas.length) % promptIdeas.length]);
   };
 
-  const startVisualCreation = () => {
-    if (!prompt.trim()) {
-      toast.info("请先输入画面描述");
-      return;
-    }
-    if (credits <= 0) {
-      toast.info("创作点不足，暂无法生成");
-      return;
-    }
-    toast.info("AI 生成功能配置完成后开放");
-  };
-
   const setReferenceImage = (index: number, file?: File) => {
     if (!file) return;
     const previousUrl = referenceImages[index];
-    if (previousUrl) {
+    if (previousUrl && objectUrlsRef.current.has(previousUrl)) {
       URL.revokeObjectURL(previousUrl);
       objectUrlsRef.current.delete(previousUrl);
     }
@@ -82,15 +136,33 @@ export function ControlPanel(_props: Record<string, unknown>) {
 
   const removeReferenceImage = (index: number) => {
     const previousUrl = referenceImages[index];
-    if (previousUrl) {
+    if (previousUrl && objectUrlsRef.current.has(previousUrl)) {
       URL.revokeObjectURL(previousUrl);
       objectUrlsRef.current.delete(previousUrl);
     }
     setReferenceImages((images) => images.map((url, slot) => (slot === index ? null : url)));
   };
 
+  const startVisualCreation = () => {
+    const normalizedPrompt = prompt.trim();
+    if (!normalizedPrompt) {
+      toast.info("请先输入画面描述");
+      return;
+    }
+
+    // Client pricing is display metadata only. The future server flow must read models_config.
+    onGenerateStart({
+      prompt: normalizedPrompt,
+      referenceImages: referenceImages.filter((url): url is string => typeof url === "string"),
+      parameters,
+    });
+  };
+
   return (
-    <aside className="relative grid w-full self-start grid-rows-[auto_auto_auto] gap-3.5 overflow-hidden rounded-[24px] border border-white/55 bg-white/20 p-2.5 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#101925]/48 lg:min-h-0 lg:self-stretch lg:grid-rows-[170px_125px_minmax(0,1fr)]">
+    <aside
+      ref={panelRef}
+      className="relative grid w-full self-start grid-rows-[auto_auto_minmax(304px,1fr)] gap-3 overflow-hidden rounded-2xl border border-white/55 bg-white/20 p-2.5 backdrop-blur-xl transition-colors duration-300 dark:border-white/[0.06] dark:bg-[#101925]/48 lg:h-full lg:min-h-0 lg:self-stretch lg:grid-rows-[184px_122px_minmax(0,1fr)]"
+    >
       <PanelSection
         icon={<Images className="h-4 w-4" />}
         title="参考图"
@@ -98,9 +170,9 @@ export function ControlPanel(_props: Record<string, unknown>) {
         compact
         className="overflow-hidden"
         trailing={
-          <span className="rounded-full border border-[#b89a61]/20 bg-[#eadfc8]/35 px-2 py-1 text-[9px] text-[#806a43]">
+          <SectionBadge>
             {referenceCount} / {MAX_REFERENCE_IMAGES}
-          </span>
+          </SectionBadge>
         }
       >
         <div className="grid grid-cols-5 gap-2">
@@ -117,25 +189,59 @@ export function ControlPanel(_props: Record<string, unknown>) {
       </PanelSection>
 
       <PanelSection
-        icon={<SlidersHorizontal className="h-4 w-4" />}
-        title="基础参数"
-        description="设置模型与画面规格"
+        icon={<Cpu className="h-4 w-4" />}
+        title="生成参数"
+        description="模型、画幅与输出质量"
         compact
-        className="overflow-hidden"
+        className="overflow-visible"
       >
-        <div className="grid grid-cols-[1.35fr_1fr_1fr] gap-2">
-          <div className="min-w-0">
-            <FieldLabel label="模型" />
-            <SelectShell value="沐莫 · 电商视觉模型" compact />
+        <div className="grid w-full grid-cols-2 gap-2 [&>button]:w-full [&>div>button]:w-full lg:grid-cols-[1.4fr_1fr_1fr]">
+          <div className="col-span-2 w-full lg:col-span-1">
+            <ModelPicker
+              open={openPicker === "model"}
+              onOpenChange={(open) => setOpenPicker(open ? "model" : null)}
+              selected={selectedModel}
+              onSelect={(option) => {
+                setParameters((current) => ({
+                  ...current,
+                  model: option.value,
+                  costCredits: option.costCredits,
+                }));
+                setOpenPicker(null);
+              }}
+              darkMode={darkMode}
+            />
           </div>
-          <div>
-            <FieldLabel label="尺寸比例" />
-            <SelectShell value="1:1（主图）" compact />
-          </div>
-          <div>
-            <FieldLabel label="像素尺寸" />
-            <SelectShell value="2048 × 2048" compact />
-          </div>
+          <ParameterPicker
+            title="比例"
+            panelTitle="画面比例"
+            open={openPicker === "ratio"}
+            onOpenChange={(open) => setOpenPicker(open ? "ratio" : null)}
+            selected={selectedRatio}
+            options={ASPECT_RATIO_OPTIONS}
+            onSelect={(value) => {
+              setParameters((current) => ({ ...current, aspectRatio: value }));
+              setOpenPicker(null);
+            }}
+            darkMode={darkMode}
+            columns={4}
+          />
+          <ParameterPicker
+            title="质量"
+            panelTitle="输出质量"
+            open={openPicker === "quality"}
+            onOpenChange={(open) => setOpenPicker(open ? "quality" : null)}
+            selected={selectedQuality}
+            options={QUALITY_OPTIONS}
+            onSelect={(value) => {
+              setParameters((current) => ({ ...current, quality: value }));
+              setOpenPicker(null);
+            }}
+            darkMode={darkMode}
+            columns={3}
+            align="end"
+            contentClassName="w-[min(250px,calc(100vw-24px))]"
+          />
         </div>
       </PanelSection>
 
@@ -143,11 +249,16 @@ export function ControlPanel(_props: Record<string, unknown>) {
         icon={<WandSparkles className="h-4 w-4" />}
         title="提示词输入"
         description="描述商品主体、场景、光影与构图"
-        className="min-h-[340px] lg:min-h-0"
+        className="min-h-0 overflow-hidden"
         bodyClassName="flex min-h-0 flex-1 flex-col"
         trailing={
-          <button type="button" disabled className="flex items-center gap-1.5 rounded-full border border-slate-400/20 bg-white/45 px-2.5 py-1 text-[10px] text-slate-500 disabled:opacity-80 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-400">
-            <Bot className="h-3 w-3" />AI 助手
+          <button
+            type="button"
+            disabled
+            className="flex items-center gap-1.5 rounded-lg border border-slate-400/20 bg-white/45 px-2 py-1 text-[9px] text-slate-500 disabled:opacity-80 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400"
+          >
+            <Bot className="h-3 w-3" />
+            AI 助手
           </button>
         }
       >
@@ -156,13 +267,17 @@ export function ControlPanel(_props: Record<string, unknown>) {
             value={prompt}
             onChange={(event) => setPrompt(event.target.value.slice(0, 1000))}
             placeholder="例如：白色香薰瓶置于浅灰石材台面，柔和侧光，简洁高级的电商主图…"
-            className="min-h-[180px] w-full flex-1 resize-none bg-transparent px-3.5 py-3 text-xs leading-5 text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200 dark:placeholder:text-slate-500"
+            className="min-h-[96px] w-full flex-1 resize-none bg-transparent px-3.5 py-3 text-xs leading-5 text-slate-700 outline-none placeholder:text-slate-400 dark:text-slate-200 dark:placeholder:text-slate-500"
           />
           <div className="flex items-center justify-between border-t border-slate-400/10 px-3 py-1.5 dark:border-white/[0.07]">
             <span className="font-mono text-[9px] text-slate-400">{charCount} / 1000</span>
             <div className="flex items-center gap-1">
-              <PromptAction label="清空" onClick={() => setPrompt("")}><Eraser className="h-3 w-3" /></PromptAction>
-              <PromptAction label="随机词" onClick={useRandomPrompt}><Sparkles className="h-3 w-3" /></PromptAction>
+              <PromptAction label="清空" onClick={() => setPrompt("")}>
+                <Eraser className="h-3 w-3" />
+              </PromptAction>
+              <PromptAction label="随机词" onClick={useRandomPrompt}>
+                <Sparkles className="h-3 w-3" />
+              </PromptAction>
             </div>
           </div>
         </div>
@@ -170,17 +285,32 @@ export function ControlPanel(_props: Record<string, unknown>) {
         <button
           type="button"
           onClick={startVisualCreation}
-          title="开始视觉创作"
-          className="mumo-neon-button mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0"
+          disabled={generating}
+          title={`开始视觉创作 · 当前余额 ${credits} 点`}
+          className="mumo-neon-button mt-2.5 flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-white transition-transform enabled:hover:-translate-y-0.5 enabled:active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <WandSparkles className="h-4 w-4 text-[#ead8ae]" />开始视觉创作
+          <WandSparkles className="h-4 w-4 text-[#ead8ae]" />
+          <span>{generating ? "生成中…" : "开始视觉创作"}</span>
+          <span className="ml-1 flex items-center gap-1 rounded-md border border-[#d8c18f]/20 bg-[#d8c18f]/[0.08] px-1.5 py-0.5 font-mono text-[9px] text-[#ead8ae]">
+            <Zap className="h-2.5 w-2.5" />
+            {parameters.costCredits} 点
+          </span>
         </button>
       </PanelSection>
     </aside>
   );
 }
 
-function PanelSection({ icon, title, description, trailing, compact = false, className = "", bodyClassName = "", children }: {
+function PanelSection({
+  icon,
+  title,
+  description,
+  trailing,
+  compact = false,
+  className = "",
+  bodyClassName = "",
+  children,
+}: {
   icon: React.ReactNode;
   title: string;
   description?: string;
@@ -191,14 +321,20 @@ function PanelSection({ icon, title, description, trailing, compact = false, cla
   children: React.ReactNode;
 }) {
   return (
-    <section className={`mumo-panel flex min-h-0 flex-col rounded-[24px] ${compact ? "p-2.5" : "p-3"} ${className}`}>
+    <section
+      className={`mumo-panel flex min-h-0 flex-col rounded-2xl ${compact ? "p-2.5" : "p-3"} ${className}`}
+    >
       <div className={`flex items-center gap-2.5 ${compact ? "mb-1.5" : "mb-2.5"}`}>
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/80 bg-white/55 text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/[0.055] dark:text-slate-300">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/80 bg-white/55 text-slate-700 shadow-sm dark:border-white/10 dark:bg-white/[0.055] dark:text-slate-300">
           {icon}
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold tracking-wide text-slate-800 dark:text-slate-100">{title}</h2>
-          {description && <p className="mt-0.5 truncate text-[9px] text-slate-400 dark:text-slate-500">{description}</p>}
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</h2>
+          {description && (
+            <p className="mt-0.5 truncate text-[9px] text-slate-400 dark:text-slate-500">
+              {description}
+            </p>
+          )}
         </div>
         {trailing}
       </div>
@@ -207,28 +343,20 @@ function PanelSection({ icon, title, description, trailing, compact = false, cla
   );
 }
 
-function FieldLabel({ label, hint }: { label: string; hint?: string }) {
+function SectionBadge({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mb-1.5 flex items-center justify-between gap-2">
-      <label className="text-[10px] font-medium text-slate-600 dark:text-slate-300">{label}</label>
-      {hint && <span className="text-[9px] text-slate-400 dark:text-slate-500">{hint}</span>}
-    </div>
+    <span className="rounded-lg border border-[#b89a61]/20 bg-[#eadfc8]/30 px-2 py-1 font-mono text-[9px] text-[#806a43] dark:border-[#d8c18f]/15 dark:bg-[#d8c18f]/[0.06] dark:text-[#d8c18f]">
+      {children}
+    </span>
   );
 }
 
-function SelectShell({ value, compact = false }: { value: string; compact?: boolean }) {
-  return (
-    <button type="button" className={`flex h-11 w-full items-center justify-between rounded-xl border border-white/80 bg-white/48 px-3 text-left text-slate-600 shadow-sm transition-colors hover:bg-white/75 dark:border-white/10 dark:bg-white/[0.045] dark:text-slate-300 dark:hover:bg-white/[0.075] ${compact ? "text-[10px]" : "text-[11px]"}`}>
-      <span className="flex min-w-0 items-center gap-2 truncate">
-        {compact ? <Maximize2 className="h-3 w-3 shrink-0 text-slate-400" /> : <MonitorUp className="h-3.5 w-3.5 shrink-0 text-[#9b8150]" />}
-        <span className="truncate">{value}</span>
-      </span>
-      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-slate-500" />
-    </button>
-  );
-}
-
-function CompactReferenceSlot({ index, url, onSelect, onRemove }: {
+function CompactReferenceSlot({
+  index,
+  url,
+  onSelect,
+  onRemove,
+}: {
   index: number;
   url: string | null;
   onSelect: (file?: File) => void;
@@ -236,9 +364,9 @@ function CompactReferenceSlot({ index, url, onSelect, onRemove }: {
 }) {
   if (!url) {
     return (
-      <label className="group relative flex h-24 min-w-0 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-slate-400/28 bg-white/34 text-slate-400 transition-all hover:border-slate-500/50 hover:bg-white/68 hover:text-slate-600 dark:border-slate-500/30 dark:bg-white/[0.035] dark:text-slate-500 dark:hover:border-slate-400/45 dark:hover:bg-white/[0.065] dark:hover:text-slate-300">
+      <label className="group relative flex aspect-square w-full min-w-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-slate-400/28 bg-white/34 text-slate-400 transition-colors hover:border-slate-500/50 hover:bg-white/68 hover:text-slate-600 dark:border-slate-500/30 dark:bg-white/[0.03] dark:text-slate-500 dark:hover:border-slate-400/45 dark:hover:bg-white/[0.06] dark:hover:text-slate-300">
         <ImagePlus className="h-4 w-4" />
-        <span className="text-[9px]">参考图 {index + 1}</span>
+        <span className="text-[8px]">参考 {index + 1}</span>
         <input
           type="file"
           accept="image/*"
@@ -253,15 +381,20 @@ function CompactReferenceSlot({ index, url, onSelect, onRemove }: {
   }
 
   return (
-    <div className="group relative h-24 min-w-0 overflow-hidden rounded-2xl border border-white/90 bg-slate-100 shadow-sm dark:border-white/10 dark:bg-slate-800">
-      <img src={url} alt={`参考图 ${index + 1}`} className="h-full w-full object-cover" />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-900/55 via-transparent to-transparent" />
+    <div className="group relative aspect-square w-full min-w-0 overflow-hidden rounded-xl border border-white/90 bg-white/70 p-1.5 shadow-sm dark:border-white/10 dark:bg-slate-900/60">
+      <img
+        src={url}
+        alt={`参考图 ${index + 1}`}
+        className="h-full w-full rounded-lg object-contain"
+      />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent" />
       <span className="absolute left-1 top-1 rounded bg-white/78 px-1 py-0.5 text-[7px] font-medium text-slate-600 backdrop-blur">
         {index + 1}
       </span>
       <div className="absolute inset-x-1 bottom-1 z-10 flex items-center justify-center gap-1">
         <label className="flex cursor-pointer items-center gap-0.5 rounded bg-slate-900/72 px-1.5 py-1 text-[7px] text-white/90 backdrop-blur transition-colors hover:bg-slate-900/88">
-          <RefreshCw className="h-2 w-2" />替换
+          <RefreshCw className="h-2 w-2" />
+          替换
           <input
             type="file"
             accept="image/*"
@@ -278,17 +411,31 @@ function CompactReferenceSlot({ index, url, onSelect, onRemove }: {
           onClick={onRemove}
           className="flex items-center gap-0.5 rounded bg-white/86 px-1.5 py-1 text-[7px] text-slate-600 backdrop-blur transition-colors hover:text-red-500"
         >
-          <Trash2 className="h-2 w-2" />删除
+          <Trash2 className="h-2 w-2" />
+          删除
         </button>
       </div>
     </div>
   );
 }
 
-function PromptAction({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+function PromptAction({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <button type="button" onClick={onClick} className="flex items-center gap-1 rounded-lg px-2 py-1 text-[9px] text-slate-400 transition-colors hover:bg-white/60 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-white/[0.06] dark:hover:text-slate-300">
-      {children}{label}
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1 rounded-lg px-2 py-1 text-[9px] text-slate-400 transition-colors hover:bg-white/60 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-white/[0.06] dark:hover:text-slate-300"
+    >
+      {children}
+      {label}
     </button>
   );
 }
