@@ -7,14 +7,72 @@ export type GenerationParameters = {
   costCredits: number;
 };
 
+export type ReferenceImageAsset = {
+  localPreviewUrl: string;
+  uploadRequestId: string;
+  assetId?: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  status: "uploading" | "ready" | "error";
+  errorMessage?: string;
+};
+
+export type ReferenceImageUploadResult = {
+  assetId: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
+export type ReferenceImageSlot = ReferenceImageAsset | null;
+
+export function getReadyReferenceImageIds(images: readonly ReferenceImageSlot[]): string[] {
+  return images
+    .flatMap((asset) => (asset?.status === "ready" && asset.assetId ? [asset.assetId] : []))
+    .slice(0, 5);
+}
+
+export function applyReferenceImageUploadSuccess(
+  images: readonly ReferenceImageSlot[],
+  index: number,
+  uploadRequestId: string,
+  result: ReferenceImageUploadResult,
+): ReferenceImageSlot[] {
+  return images.map((asset, slot) =>
+    slot === index && asset?.status === "uploading" && asset.uploadRequestId === uploadRequestId
+      ? {
+          ...asset,
+          ...result,
+          status: "ready",
+          errorMessage: undefined,
+        }
+      : asset,
+  );
+}
+
+export function removeReferenceImageAt(
+  images: readonly ReferenceImageSlot[],
+  index: number,
+): ReferenceImageSlot[] {
+  return images.map((asset, slot) => (slot === index ? null : asset));
+}
+
 export type GenerationSubmission = {
   prompt: string;
-  referenceImages: string[];
+  referenceImageIds: string[];
   parameters: GenerationParameters;
 };
 
 export type GenerationPrefill = GenerationSubmission & {
   nonce: number;
+};
+
+export type GenerationInputParameters = {
+  aspectRatio: string;
+  quality: GenerationQuality;
+  referenceImageIds: string[];
+  costCredits: number;
 };
 
 export type ModelOption = {
@@ -132,25 +190,61 @@ function getString(value: unknown, fallback: string): string {
   return typeof value === "string" && value ? value : fallback;
 }
 
+type GenerationInputParameterCandidate = {
+  aspectRatio?: unknown;
+  quality?: unknown;
+  referenceImageIds?: unknown;
+  costCredits?: unknown;
+};
+
+function getInputParameterCandidate(inputParams: unknown): GenerationInputParameterCandidate {
+  return inputParams && typeof inputParams === "object"
+    ? (inputParams as GenerationInputParameterCandidate)
+    : {};
+}
+
+export function getReferenceImageIds(inputParams: unknown): string[] {
+  const candidate = getInputParameterCandidate(inputParams).referenceImageIds;
+  if (!Array.isArray(candidate)) return [];
+  return candidate
+    .filter((assetId): assetId is string => typeof assetId === "string" && !!assetId.trim())
+    .map((assetId) => assetId.trim())
+    .slice(0, 5);
+}
+
 export function restoreGenerationParameters(
   modelKey?: string,
-  inputParams?: Record<string, unknown>,
+  inputParams?: unknown,
 ): GenerationParameters {
+  const candidate = getInputParameterCandidate(inputParams);
   const model = getModelOption(modelKey);
-  const qualityValue = getString(inputParams?.quality, DEFAULT_GENERATION_PARAMETERS.quality);
+  const qualityValue = getString(candidate.quality, DEFAULT_GENERATION_PARAMETERS.quality);
   const quality = QUALITY_OPTIONS.some((option) => option.value === qualityValue)
     ? (qualityValue as GenerationQuality)
     : DEFAULT_GENERATION_PARAMETERS.quality;
-  const clientCost = inputParams?.costCredits;
+  const clientCost = candidate.costCredits;
 
   return {
     model: model.value,
-    aspectRatio: getString(inputParams?.aspectRatio, DEFAULT_GENERATION_PARAMETERS.aspectRatio),
+    aspectRatio: getString(candidate.aspectRatio, DEFAULT_GENERATION_PARAMETERS.aspectRatio),
     // Concrete pixels will be derived server-side from aspectRatio + quality.
     quality,
     costCredits:
       typeof clientCost === "number" && Number.isFinite(clientCost)
         ? clientCost
         : model.costCredits,
+  };
+}
+
+export function restoreGenerationInputParameters(
+  modelKey?: string,
+  inputParams?: unknown,
+): GenerationInputParameters {
+  const parameters = restoreGenerationParameters(modelKey, inputParams);
+  return {
+    aspectRatio: parameters.aspectRatio,
+    quality: parameters.quality,
+    referenceImageIds: getReferenceImageIds(inputParams),
+    costCredits: parameters.costCredits,
   };
 }

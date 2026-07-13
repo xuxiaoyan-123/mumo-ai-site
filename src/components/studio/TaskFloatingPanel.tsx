@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CheckCircle2, CircleDashed, Clock3, ListChecks, Loader2, XCircle } from "lucide-react";
 import { isGptImage2BackupModel } from "@/lib/gpt-image-2-backup-models";
+import type { GenerationInputParameters } from "./generation-options";
 
 export type TaskStatus = "waiting" | "submitting" | "generating" | "done" | "failed";
 
@@ -11,7 +12,7 @@ export type FloatingTask = {
   prompt?: string;
   modelKey?: string;
   modelName?: string;
-  inputParams?: Record<string, unknown>;
+  inputParams?: GenerationInputParameters;
   errorMessage?: string | null;
   resultImageUrl?: string | null;
 };

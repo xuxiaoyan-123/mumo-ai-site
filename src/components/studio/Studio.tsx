@@ -5,8 +5,11 @@ import { Canvas } from "./Canvas";
 import { TopBar } from "./TopBar";
 import { TaskFloatingPanel, type FloatingTask } from "./TaskFloatingPanel";
 import {
+  getReferenceImageIds,
   getModelOption,
+  restoreGenerationInputParameters,
   restoreGenerationParameters,
+  type GenerationInputParameters,
   type GenerationPrefill,
   type GenerationSubmission,
 } from "./generation-options";
@@ -36,27 +39,18 @@ type StoredLatestResult = {
 type ReuseSource = {
   prompt: string;
   modelKey?: string;
-  inputParams?: Record<string, unknown>;
+  inputParams?: unknown;
 };
-
-function getReusableReferenceImages(inputParams?: Record<string, unknown>) {
-  return Array.isArray(inputParams?.referenceImages)
-    ? inputParams.referenceImages.filter(
-        (url): url is string =>
-          typeof url === "string" && (/^https?:\/\//i.test(url) || /^blob:/i.test(url)),
-      )
-    : [];
-}
 
 function createGenerationPrefill(
   prompt: string,
   modelKey?: string,
-  inputParams?: Record<string, unknown>,
+  inputParams?: unknown,
 ): GenerationPrefill {
   return {
     nonce: Date.now(),
     prompt,
-    referenceImages: getReusableReferenceImages(inputParams),
+    referenceImageIds: getReferenceImageIds(inputParams),
     parameters: restoreGenerationParameters(modelKey, inputParams),
   };
 }
@@ -236,7 +230,7 @@ export function Studio() {
     setRetryPrefill(null);
     setReusePrefill(null);
     setCurrentReuseSource(null);
-    setReferenceResetToken(0);
+    setReferenceResetToken((token) => token + 1);
     pollingTaskIdsRef.current.clear();
   }, [session?.user?.id]);
 
@@ -252,7 +246,7 @@ export function Studio() {
       setRetryPrefill(null);
       setReusePrefill(null);
       setCurrentReuseSource(null);
-      setReferenceResetToken(0);
+      setReferenceResetToken((token) => token + 1);
       pollingTaskIdsRef.current.clear();
       return;
     }
@@ -266,7 +260,7 @@ export function Studio() {
               prompt: string | null;
               modelId: string;
               status: string;
-              inputParams?: Record<string, unknown> | null;
+              inputParams?: unknown;
               resultImageUrl?: string | null;
               deductionStatus?: string | null;
               deductionId?: string | null;
@@ -280,7 +274,7 @@ export function Studio() {
                 prompt: task.prompt ?? "",
                 modelKey: task.modelId,
                 modelName: task.modelId,
-                inputParams: task.inputParams ?? {},
+                inputParams: restoreGenerationInputParameters(task.modelId, task.inputParams),
                 resultImageUrl: task.resultImageUrl ?? null,
                 errorMessage: task.errorMessage ?? null,
               };
@@ -402,12 +396,12 @@ export function Studio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id, adminTasks]);
 
-  const handleGenerateStart = ({ prompt, referenceImages, parameters }: GenerationSubmission) => {
+  const handleGenerateStart = ({ prompt, referenceImageIds, parameters }: GenerationSubmission) => {
     const model = getModelOption(parameters.model);
-    const inputParams: Record<string, unknown> = {
+    const inputParams: GenerationInputParameters = {
       aspectRatio: parameters.aspectRatio,
       quality: parameters.quality,
-      referenceImages,
+      referenceImageIds,
       // Concrete pixels will be derived server-side from aspectRatio + quality.
       // UI estimate only. A future server request must ignore this and read models_config.
       costCredits: parameters.costCredits,
@@ -459,7 +453,7 @@ export function Studio() {
     prompt: string;
     modelKey: string;
     modelName: string;
-    inputParams: Record<string, unknown>;
+    inputParams: GenerationInputParameters;
   }) => {
     if (!session) return false;
     if (effectiveCurrentBatchTaskCount >= 3) {
@@ -547,11 +541,13 @@ export function Studio() {
 
     setRetryingTaskIds((ids) => (ids.includes(taskId) ? ids : [...ids, taskId]));
     try {
+      const retryInputParams =
+        failedTask.inputParams ?? restoreGenerationInputParameters(failedTask.modelKey);
       const task = await createTask({
         data: {
           modelKey: failedTask.modelKey,
           prompt: failedTask.prompt,
-          inputParams: failedTask.inputParams ?? {},
+          inputParams: retryInputParams,
         },
       });
       const title = task.prompt.trim().slice(0, 20) || failedTask.modelName || task.modelId;
@@ -562,7 +558,7 @@ export function Studio() {
         prompt: task.prompt,
         modelKey: failedTask.modelKey,
         modelName: failedTask.modelName ?? task.modelId,
-        inputParams: failedTask.inputParams ?? {},
+        inputParams: retryInputParams,
       };
       setAdminTasks((tasks) => trimPanelTasks([...tasks, queuedTask]));
       prepareCanvasForNewTask(queuedTask, {
@@ -713,14 +709,9 @@ export function Studio() {
       return;
     }
 
-    const referenceImages = getReusableReferenceImages(source.inputParams);
-    setReusePrefill(
-      createGenerationPrefill(source.prompt, source.modelKey, {
-        ...(source.inputParams ?? {}),
-        referenceImages,
-      }),
-    );
-    if (referenceImages.length > 0) {
+    const referenceImageIds = getReferenceImageIds(source.inputParams);
+    setReusePrefill(createGenerationPrefill(source.prompt, source.modelKey, source.inputParams));
+    if (referenceImageIds.length > 0) {
       toast.success("已复用提示词和参考图，可修改后再次生成");
     } else {
       toast.message("已复用提示词，未找到可复用参考图");

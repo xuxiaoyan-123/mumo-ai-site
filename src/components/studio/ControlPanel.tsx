@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot,
+  CircleAlert,
+  CircleCheck,
   Cpu,
   Eraser,
   ImagePlus,
   Images,
+  LoaderCircle,
   RefreshCw,
   Sparkles,
   Trash2,
@@ -18,10 +21,15 @@ import {
   ASPECT_RATIO_OPTIONS,
   DEFAULT_GENERATION_PARAMETERS,
   QUALITY_OPTIONS,
+  applyReferenceImageUploadSuccess,
+  getReadyReferenceImageIds,
   getModelOption,
+  removeReferenceImageAt,
   type GenerationParameters,
   type GenerationPrefill,
   type GenerationSubmission,
+  type ReferenceImageAsset,
+  type ReferenceImageSlot,
 } from "./generation-options";
 import { usePortalTheme } from "./usePortalTheme";
 
@@ -48,17 +56,67 @@ type OpenPicker = "model" | "ratio" | "quality" | null;
 
 const MAX_REFERENCE_IMAGES = 5;
 
+type ReferenceImageSlots = ReferenceImageSlot[];
+
+type InputImageUploadSuccess = {
+  ok: true;
+  assetId: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  status: "ready";
+};
+
+type InputImageUploadFailure = {
+  ok?: false;
+  message?: string;
+};
+
 const promptIdeas = [
   "高级电商产品摄影，纯净背景，柔和轮廓光，突出商品材质与细节",
   "现代家居商品场景，自然窗光，低饱和配色，干净留白，商业摄影",
   "轻奢美妆主图，银灰蓝背景，细腻光影，通透材质，高级陈列",
 ];
 
-function getReferenceSlots(urls: string[] = []) {
-  return Array.from(
-    { length: MAX_REFERENCE_IMAGES },
-    (_, index): string | null => urls[index] ?? null,
+function getReferenceSlots(): ReferenceImageSlots {
+  return Array.from({ length: MAX_REFERENCE_IMAGES }, () => null);
+}
+
+function isInputImageUploadSuccess(value: unknown): value is InputImageUploadSuccess {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<InputImageUploadSuccess>;
+  return (
+    candidate.ok === true &&
+    typeof candidate.assetId === "string" &&
+    !!candidate.assetId &&
+    typeof candidate.filename === "string" &&
+    typeof candidate.mimeType === "string" &&
+    typeof candidate.sizeBytes === "number" &&
+    candidate.status === "ready"
   );
+}
+
+function getUploadErrorMessage(value: unknown): string {
+  if (value && typeof value === "object") {
+    const candidate = value as InputImageUploadFailure;
+    if (typeof candidate.message === "string" && candidate.message.trim()) {
+      return candidate.message.trim();
+    }
+  }
+  return "参考图上传失败，请重新选择。";
+}
+
+async function deleteReferenceImageAsset(assetId: string): Promise<void> {
+  try {
+    await fetch("/api/uploads/input-image", {
+      method: "DELETE",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ assetId }),
+    });
+  } catch {
+    // Local removal stays immediate; expiry cleanup is the fallback.
+  }
 }
 
 export function ControlPanel({
@@ -72,9 +130,10 @@ export function ControlPanel({
   const [prompt, setPrompt] = useState("");
   const [parameters, setParameters] = useState<GenerationParameters>(DEFAULT_GENERATION_PARAMETERS);
   const [openPicker, setOpenPicker] = useState<OpenPicker>(null);
-  const [referenceImages, setReferenceImages] = useState<Array<string | null>>(() =>
+  const [referenceImages, setReferenceImages] = useState<ReferenceImageSlots>(() =>
     getReferenceSlots(),
   );
+  const referenceImagesRef = useRef<ReferenceImageSlots>(referenceImages);
   const objectUrlsRef = useRef(new Set<string>());
   const { anchorRef: panelRef, darkMode } = usePortalTheme<HTMLElement>();
   const charCount = prompt.length;
@@ -96,10 +155,30 @@ export function ControlPanel({
     objectUrlsRef.current.clear();
   }, []);
 
+  const updateReferenceImages = useCallback(
+    (updater: (images: ReferenceImageSlots) => ReferenceImageSlots) => {
+      setReferenceImages((images) => {
+        const nextImages = updater(images);
+        referenceImagesRef.current = nextImages;
+        return nextImages;
+      });
+    },
+    [],
+  );
+
   const replaceReferenceImages = useCallback(
-    (urls: string[] = []) => {
+    (referenceImageIds: string[] = []) => {
+      const currentIds = getReadyReferenceImageIds(referenceImagesRef.current);
+      const canPreserveCurrentPreviews =
+        referenceImageIds.length > 0 &&
+        referenceImageIds.length === currentIds.length &&
+        referenceImageIds.every((assetId, index) => assetId === currentIds[index]);
+      if (canPreserveCurrentPreviews) return;
+
       releaseObjectUrls();
-      setReferenceImages(getReferenceSlots(urls.slice(0, MAX_REFERENCE_IMAGES)));
+      const emptySlots = getReferenceSlots();
+      referenceImagesRef.current = emptySlots;
+      setReferenceImages(emptySlots);
     },
     [releaseObjectUrls],
   );
@@ -114,7 +193,7 @@ export function ControlPanel({
     if (!activePrefill) return;
     setPrompt(activePrefill.prompt.slice(0, 1000));
     setParameters(activePrefill.parameters);
-    replaceReferenceImages(activePrefill.referenceImages);
+    replaceReferenceImages(activePrefill.referenceImageIds);
   }, [activePrefill, replaceReferenceImages]);
 
   const useRandomPrompt = () => {
@@ -124,26 +203,88 @@ export function ControlPanel({
 
   const setReferenceImage = (index: number, file?: File) => {
     if (!file) return;
-    const previousUrl = referenceImages[index];
-    if (previousUrl && objectUrlsRef.current.has(previousUrl)) {
-      URL.revokeObjectURL(previousUrl);
-      objectUrlsRef.current.delete(previousUrl);
+    const previousAsset = referenceImagesRef.current[index];
+    if (previousAsset?.status === "ready" && previousAsset.assetId) {
+      void deleteReferenceImageAsset(previousAsset.assetId);
     }
-    const nextUrl = URL.createObjectURL(file);
-    objectUrlsRef.current.add(nextUrl);
-    setReferenceImages((images) => images.map((url, slot) => (slot === index ? nextUrl : url)));
+    if (previousAsset && objectUrlsRef.current.has(previousAsset.localPreviewUrl)) {
+      URL.revokeObjectURL(previousAsset.localPreviewUrl);
+      objectUrlsRef.current.delete(previousAsset.localPreviewUrl);
+    }
+    const localPreviewUrl = URL.createObjectURL(file);
+    const uploadRequestId = crypto.randomUUID();
+    objectUrlsRef.current.add(localPreviewUrl);
+    const uploadingAsset: ReferenceImageAsset = {
+      localPreviewUrl,
+      uploadRequestId,
+      filename: file.name,
+      mimeType: file.type,
+      sizeBytes: file.size,
+      status: "uploading",
+    };
+    updateReferenceImages((images) =>
+      images.map((asset, slot) => (slot === index ? uploadingAsset : asset)),
+    );
+
+    void (async () => {
+      const formData = new FormData();
+      formData.append("image", file, file.name);
+
+      try {
+        const response = await fetch("/api/uploads/input-image", {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        });
+        let payload: unknown;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = undefined;
+        }
+        if (!response.ok || !isInputImageUploadSuccess(payload)) {
+          throw new Error(getUploadErrorMessage(payload));
+        }
+
+        if (referenceImagesRef.current[index]?.uploadRequestId !== uploadRequestId) {
+          void deleteReferenceImageAsset(payload.assetId);
+          return;
+        }
+        updateReferenceImages((images) =>
+          applyReferenceImageUploadSuccess(images, index, uploadRequestId, payload),
+        );
+      } catch (error) {
+        if (referenceImagesRef.current[index]?.uploadRequestId !== uploadRequestId) return;
+        const message = error instanceof Error ? error.message : "参考图上传失败，请重新选择。";
+        updateReferenceImages((images) =>
+          images.map((asset, slot) =>
+            slot === index && asset?.uploadRequestId === uploadRequestId
+              ? { ...asset, status: "error", assetId: undefined, errorMessage: message }
+              : asset,
+          ),
+        );
+        toast.error(message);
+      }
+    })();
   };
 
   const removeReferenceImage = (index: number) => {
-    const previousUrl = referenceImages[index];
-    if (previousUrl && objectUrlsRef.current.has(previousUrl)) {
-      URL.revokeObjectURL(previousUrl);
-      objectUrlsRef.current.delete(previousUrl);
+    const previousAsset = referenceImagesRef.current[index];
+    if (previousAsset?.status === "ready" && previousAsset.assetId) {
+      void deleteReferenceImageAsset(previousAsset.assetId);
     }
-    setReferenceImages((images) => images.map((url, slot) => (slot === index ? null : url)));
+    if (previousAsset && objectUrlsRef.current.has(previousAsset.localPreviewUrl)) {
+      URL.revokeObjectURL(previousAsset.localPreviewUrl);
+      objectUrlsRef.current.delete(previousAsset.localPreviewUrl);
+    }
+    updateReferenceImages((images) => removeReferenceImageAt(images, index));
   };
 
   const startVisualCreation = () => {
+    if (referenceImages.some((asset) => asset?.status === "uploading")) {
+      toast.info("参考图正在上传");
+      return;
+    }
     const normalizedPrompt = prompt.trim();
     if (!normalizedPrompt) {
       toast.info("请先输入画面描述");
@@ -153,7 +294,7 @@ export function ControlPanel({
     // Client pricing is display metadata only. The future server flow must read models_config.
     onGenerateStart({
       prompt: normalizedPrompt,
-      referenceImages: referenceImages.filter((url): url is string => typeof url === "string"),
+      referenceImageIds: getReadyReferenceImageIds(referenceImages),
       parameters,
     });
   };
@@ -176,11 +317,11 @@ export function ControlPanel({
         }
       >
         <div className="grid grid-cols-5 gap-2">
-          {referenceImages.map((url, index) => (
+          {referenceImages.map((asset, index) => (
             <CompactReferenceSlot
               key={index}
               index={index}
-              url={url}
+              asset={asset}
               onSelect={(file) => setReferenceImage(index, file)}
               onRemove={() => removeReferenceImage(index)}
             />
@@ -353,23 +494,23 @@ function SectionBadge({ children }: { children: React.ReactNode }) {
 
 function CompactReferenceSlot({
   index,
-  url,
+  asset,
   onSelect,
   onRemove,
 }: {
   index: number;
-  url: string | null;
+  asset: ReferenceImageAsset | null;
   onSelect: (file?: File) => void;
   onRemove: () => void;
 }) {
-  if (!url) {
+  if (!asset) {
     return (
       <label className="group relative flex aspect-square w-full min-w-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-slate-400/28 bg-white/34 text-slate-400 transition-colors hover:border-slate-500/50 hover:bg-white/68 hover:text-slate-600 dark:border-slate-500/30 dark:bg-white/[0.03] dark:text-slate-500 dark:hover:border-slate-400/45 dark:hover:bg-white/[0.06] dark:hover:text-slate-300">
         <ImagePlus className="h-4 w-4" />
         <span className="text-[8px]">参考 {index + 1}</span>
         <input
           type="file"
-          accept="image/*"
+          accept="image/png,image/jpeg,image/webp"
           className="sr-only"
           onChange={(event) => {
             onSelect(event.target.files?.[0]);
@@ -383,7 +524,7 @@ function CompactReferenceSlot({
   return (
     <div className="group relative aspect-square w-full min-w-0 overflow-hidden rounded-xl border border-white/90 bg-white/70 p-1.5 shadow-sm dark:border-white/10 dark:bg-slate-900/60">
       <img
-        src={url}
+        src={asset.localPreviewUrl}
         alt={`参考图 ${index + 1}`}
         className="h-full w-full rounded-lg object-contain"
       />
@@ -391,13 +532,33 @@ function CompactReferenceSlot({
       <span className="absolute left-1 top-1 rounded bg-white/78 px-1 py-0.5 text-[7px] font-medium text-slate-600 backdrop-blur">
         {index + 1}
       </span>
+      <span
+        title={asset.errorMessage}
+        aria-live="polite"
+        className={`absolute right-1 top-1 z-10 flex items-center gap-0.5 rounded px-1 py-0.5 text-[7px] font-medium backdrop-blur ${
+          asset.status === "error"
+            ? "bg-red-500/85 text-white"
+            : asset.status === "ready"
+              ? "bg-emerald-600/80 text-white"
+              : "bg-slate-900/72 text-white"
+        }`}
+      >
+        {asset.status === "uploading" ? (
+          <LoaderCircle className="h-2 w-2 animate-spin" />
+        ) : asset.status === "ready" ? (
+          <CircleCheck className="h-2 w-2" />
+        ) : (
+          <CircleAlert className="h-2 w-2" />
+        )}
+        {asset.status === "uploading" ? "上传中" : asset.status === "ready" ? "已上传" : "失败"}
+      </span>
       <div className="absolute inset-x-1 bottom-1 z-10 flex items-center justify-center gap-1">
         <label className="flex cursor-pointer items-center gap-0.5 rounded bg-slate-900/72 px-1.5 py-1 text-[7px] text-white/90 backdrop-blur transition-colors hover:bg-slate-900/88">
           <RefreshCw className="h-2 w-2" />
           替换
           <input
             type="file"
-            accept="image/*"
+            accept="image/png,image/jpeg,image/webp"
             className="sr-only"
             onChange={(event) => {
               onSelect(event.target.files?.[0]);
