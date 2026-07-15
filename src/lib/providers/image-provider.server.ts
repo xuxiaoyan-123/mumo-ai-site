@@ -2,6 +2,7 @@ import "@tanstack/react-start/server-only";
 
 import {
   type ImageGenerationInput,
+  type ImageQuality,
   type NormalizedProviderError,
   type NormalizedProviderImage,
   type ProviderErrorCode,
@@ -10,6 +11,13 @@ import {
   type ProviderTaskResult,
   type ProviderTaskStatus,
 } from "../generation.schemas";
+
+export type ImageProviderCapabilities = {
+  modes: readonly ProviderGenerationMode[];
+  maxReferenceImages?: number;
+  aspectRatios?: readonly string[];
+  qualities?: readonly ImageQuality[];
+};
 
 export type {
   ImageGenerationInput,
@@ -25,12 +33,15 @@ export type {
 } from "../generation.schemas";
 
 export interface ImageProvider {
+  readonly key: string;
+  readonly capabilities: ImageProviderCapabilities;
   createTextToImageTask(input: ImageGenerationInput): Promise<ProviderTaskCreated>;
   createImageToImageTask(input: ImageGenerationInput): Promise<ProviderTaskCreated>;
   pollTextToImageTask(taskId: string): Promise<ProviderTaskResult>;
   pollImageToImageTask(taskId: string): Promise<ProviderTaskResult>;
   createTask(input: ImageGenerationInput): Promise<ProviderTaskCreated>;
   pollTask(task: Pick<ProviderTaskCreated, "taskId" | "mode">): Promise<ProviderTaskResult>;
+  getTask(task: Pick<ProviderTaskCreated, "taskId" | "mode">): Promise<ProviderTaskResult>;
 }
 
 export class ImageProviderError extends Error {

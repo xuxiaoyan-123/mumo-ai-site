@@ -256,9 +256,10 @@ export function Studio() {
         const recovered = (res?.items ?? [])
           .map(
             (task: {
-              id: string;
+              taskId: string;
               prompt: string | null;
               modelId: string;
+              modelName?: string;
               status: string;
               inputParams?: unknown;
               resultImageUrl?: string | null;
@@ -268,12 +269,12 @@ export function Studio() {
             }) => {
               const promptTitle = task.prompt?.trim().slice(0, 20);
               return {
-                id: task.id,
+                id: task.taskId,
                 title: promptTitle || task.modelId || "生成任务",
                 status: mapRecoveredTaskStatus(task.status, task.deductionStatus, task.deductionId),
                 prompt: task.prompt ?? "",
                 modelKey: task.modelId,
-                modelName: task.modelId,
+                modelName: task.modelName ?? task.modelId,
                 inputParams: restoreGenerationInputParameters(task.modelId, task.inputParams),
                 resultImageUrl: task.resultImageUrl ?? null,
                 errorMessage: task.errorMessage ?? null,
@@ -396,7 +397,15 @@ export function Studio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id, adminTasks]);
 
-  const handleGenerateStart = ({ prompt, referenceImageIds, parameters }: GenerationSubmission) => {
+  const handleGenerateStart = async ({
+    prompt,
+    referenceImageIds,
+    parameters,
+  }: GenerationSubmission) => {
+    if (!session) {
+      setForceAuth(true);
+      return;
+    }
     const model = getModelOption(parameters.model);
     const inputParams: GenerationInputParameters = {
       aspectRatio: parameters.aspectRatio,
@@ -415,7 +424,58 @@ export function Studio() {
       modelKey: parameters.model,
       inputParams,
     });
-    toast.info("生成参数已传入工作区，模型服务尚未接入");
+    setGenerating(true);
+    setProgress({
+      stage: "submitting",
+      attempt: 0,
+      elapsedSec: 0,
+      message: "正在创建生成任务...",
+    });
+    try {
+      const task = await createTask({
+        data: {
+          modelKey: parameters.model,
+          prompt,
+          referenceImageIds,
+          parameters: {
+            aspectRatio: parameters.aspectRatio,
+            quality: parameters.quality,
+          },
+          idempotencyKey: crypto.randomUUID(),
+        },
+      });
+      const floatingTask: FloatingTask = {
+        id: task.taskId,
+        title: prompt.slice(0, 20) || task.modelName,
+        status:
+          task.status === "succeeded"
+            ? "done"
+            : task.status === "failed"
+              ? "failed"
+              : task.status === "running"
+                ? "generating"
+                : "waiting",
+        prompt,
+        modelKey: task.modelId,
+        modelName: task.modelName,
+        inputParams: task.inputParams,
+        resultImageUrl: task.resultImageUrl,
+        errorMessage: task.errorMessage,
+      };
+      setAdminTasks((tasks) => trimPanelTasks([floatingTask, ...tasks]));
+      if (task.status === "failed") {
+        setProgress(null);
+        toast.error(task.errorMessage ?? "任务创建失败，请稍后重试。");
+      } else {
+        setProgress(getQueueProgress(floatingTask));
+        toast.success("生成任务已创建");
+      }
+    } catch (error) {
+      setProgress(null);
+      toast.error(error instanceof Error ? error.message : "任务创建失败，请稍后重试。");
+    } finally {
+      setGenerating(false);
+    }
   };
   const handleGenerateDone = (url: string | null) => {
     setGenerating(false);
@@ -464,7 +524,12 @@ export function Studio() {
       data: {
         modelKey: input.modelKey,
         prompt: input.prompt,
-        inputParams: input.inputParams,
+        referenceImageIds: input.inputParams.referenceImageIds,
+        parameters: {
+          aspectRatio: input.inputParams.aspectRatio,
+          quality: input.inputParams.quality,
+        },
+        idempotencyKey: crypto.randomUUID(),
       },
     });
 
@@ -547,7 +612,12 @@ export function Studio() {
         data: {
           modelKey: failedTask.modelKey,
           prompt: failedTask.prompt,
-          inputParams: retryInputParams,
+          referenceImageIds: retryInputParams.referenceImageIds,
+          parameters: {
+            aspectRatio: retryInputParams.aspectRatio,
+            quality: retryInputParams.quality,
+          },
+          idempotencyKey: crypto.randomUUID(),
         },
       });
       const title = task.prompt.trim().slice(0, 20) || failedTask.modelName || task.modelId;

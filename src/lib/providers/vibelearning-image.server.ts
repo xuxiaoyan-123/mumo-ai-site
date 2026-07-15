@@ -10,6 +10,7 @@ import {
   ImageProviderError,
   type ImageGenerationInput,
   type ImageProvider,
+  type ProviderTaskStatus,
   isImageToImageMode,
   normalizeImageResults,
   normalizeProviderError,
@@ -29,6 +30,20 @@ const TASK_PATHS: Record<ProviderGenerationMode, string> = {
 
 const PROVIDER_SIZE_MAP: Readonly<Record<string, string>> = {
   "1:1|1K": "1024x1024",
+  "1:1|2K": "2048x2048",
+  "1:1|4K": "4096x4096",
+  "4:3|1K": "1024x768",
+  "4:3|2K": "2048x1536",
+  "4:3|4K": "4096x3072",
+  "3:4|1K": "768x1024",
+  "3:4|2K": "1536x2048",
+  "3:4|4K": "3072x4096",
+  "16:9|1K": "1024x576",
+  "16:9|2K": "2048x1152",
+  "16:9|4K": "4096x2304",
+  "9:16|1K": "576x1024",
+  "9:16|2K": "1152x2048",
+  "9:16|4K": "2304x4096",
 };
 
 export const vibeLearningTaskRequestSchema = z
@@ -37,8 +52,6 @@ export const vibeLearningTaskRequestSchema = z
     prompt: z.string().min(1),
     size: z.string().min(1),
     n: z.literal(1),
-    response_format: z.literal("url"),
-    output_format: z.literal("webp"),
   })
   .strict();
 
@@ -62,6 +75,8 @@ export const vibeLearningTaskPollResponseSchema = z
   .object({
     status: z.string().min(1),
     data: z.unknown().optional(),
+    response: z.unknown().optional(),
+    result: z.unknown().optional(),
     error: z.unknown().optional(),
     message: z.unknown().optional(),
     code: z.unknown().optional(),
@@ -70,6 +85,8 @@ export const vibeLearningTaskPollResponseSchema = z
 
 export type VibeLearningProviderOptions = {
   env?: VibeLearningImageEnv;
+  apiKey?: string;
+  baseUrl?: string;
   fetchImpl?: typeof fetch;
   maxReferenceImages?: number;
 };
@@ -77,6 +94,89 @@ export type VibeLearningProviderOptions = {
 type ResolvedConfiguration = {
   apiBaseUrl: string;
   apiKey: string;
+};
+
+type ProviderTaskHttpResponse = {
+  httpStatus: number;
+  responseIsJson: boolean;
+  payload: unknown;
+};
+
+type ProviderTaskValueSummary = {
+  type: "null" | "array" | "object" | "string" | "other";
+  keys: string[];
+  count: number | null;
+  status: string | null;
+  state: string | null;
+};
+
+export type ProviderTaskDiagnostic = {
+  generationTaskId: string;
+  provider: string;
+  providerTaskIdPresent: boolean;
+  generationMode: string;
+  httpStatus: number;
+  responseIsJson: boolean;
+  topLevelKeys: string[];
+  topStatus: string | null;
+  topState: string | null;
+  topCode: string | number | null;
+  dataType: ProviderTaskValueSummary["type"];
+  dataKeys: string[];
+  dataCount: number | null;
+  dataStatus: string | null;
+  dataState: string | null;
+  nestedDataType: ProviderTaskValueSummary["type"];
+  nestedDataKeys: string[];
+  nestedDataCount: number | null;
+  resultType: ProviderTaskValueSummary["type"];
+  resultKeys: string[];
+  resultStatus: string | null;
+  resultState: string | null;
+  resultDataType: ProviderTaskValueSummary["type"];
+  resultDataKeys: string[];
+  resultDataCount: number | null;
+  responseType: ProviderTaskValueSummary["type"];
+  responseKeys: string[];
+  responseCount: number | null;
+  responseStatus: string | null;
+  responseState: string | null;
+  responseItemType: ProviderTaskValueSummary["type"];
+  responseItemKeys: string[];
+  responseDataType: ProviderTaskValueSummary["type"];
+  responseDataKeys: string[];
+  responseDataCount: number | null;
+  responseOutputType: ProviderTaskValueSummary["type"];
+  responseOutputKeys: string[];
+  responseOutputCount: number | null;
+  knownResultFlags: {
+    topUrl: boolean;
+    topB64Json: boolean;
+    dataUrl: boolean;
+    dataB64Json: boolean;
+    dataDataUrl: boolean;
+    dataDataB64Json: boolean;
+    resultUrl: boolean;
+    resultB64Json: boolean;
+    resultDataUrl: boolean;
+    resultDataB64Json: boolean;
+    responseUrl: boolean;
+    responseB64Json: boolean;
+    responseImageUrl: boolean;
+    responseOutputUrl: boolean;
+    responseItemUrl: boolean;
+    responseItemB64Json: boolean;
+    responseItemImageUrl: boolean;
+    responseItemOutputUrl: boolean;
+    responseDataUrl: boolean;
+    responseDataB64Json: boolean;
+    responseDataImageUrl: boolean;
+    responseDataOutputUrl: boolean;
+    responseOutputB64Json: boolean;
+    responseOutputImageUrl: boolean;
+  };
+  normalizedStatus: string | null;
+  normalizationErrorCode: string | null;
 };
 
 type ExtractedProviderError = {
@@ -101,12 +201,13 @@ function getGlobalEnv(): VibeLearningImageEnv {
   return asEnv(globalRecord[CLOUDFLARE_ENV_GLOBAL_KEY] ?? globalRecord.__env__);
 }
 
-function resolveConfiguration(explicitEnv?: VibeLearningImageEnv): ResolvedConfiguration {
+function resolveConfiguration(options: Pick<VibeLearningProviderOptions, "env" | "apiKey" | "baseUrl">): ResolvedConfiguration {
+  const explicitEnv = options.env;
   const contextEnv = getContextEnv();
   const globalEnv = getGlobalEnv();
   const processEnv = typeof process === "undefined" ? undefined : process.env;
   const apiKey = String(
-    explicitEnv?.VIBELEARNING_IMAGE_API_KEY ??
+    options.apiKey ?? explicitEnv?.VIBELEARNING_IMAGE_API_KEY ??
       contextEnv.VIBELEARNING_IMAGE_API_KEY ??
       globalEnv.VIBELEARNING_IMAGE_API_KEY ??
       processEnv?.VIBELEARNING_IMAGE_API_KEY ??
@@ -122,7 +223,7 @@ function resolveConfiguration(explicitEnv?: VibeLearningImageEnv): ResolvedConfi
   }
 
   const configuredBaseUrl = String(
-    explicitEnv?.VIBELEARNING_IMAGE_API_BASE_URL ??
+    options.baseUrl ?? explicitEnv?.VIBELEARNING_IMAGE_API_BASE_URL ??
       contextEnv.VIBELEARNING_IMAGE_API_BASE_URL ??
       globalEnv.VIBELEARNING_IMAGE_API_BASE_URL ??
       processEnv?.VIBELEARNING_IMAGE_API_BASE_URL ??
@@ -161,22 +262,110 @@ export function resolveProviderSize(aspectRatio: string, quality: string): strin
   return resolved;
 }
 
+function normalizeVibeLearningTaskStatus(status: unknown): ProviderTaskStatus {
+  const normalized = typeof status === "string"
+    ? status.trim().toLowerCase().replace(/[\s-]+/g, "_")
+    : status;
+  if (normalized === "done") return "completed";
+  if (normalized === "rejected" || normalized === "expired") return "failed";
+  return normalizeTaskStatus(status);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && !Array.isArray(value) && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function safeDiagnosticKeys(record: Record<string, unknown>): string[] {
+  return Object.keys(record)
+    .filter((key) => key !== "__proto__" && key !== "prototype" && key !== "constructor")
+    .sort();
+}
+
+function safeDiagnosticLabel(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const label = value.trim();
+  return label.length > 0 && label.length <= 128 && !label.includes("://") ? label : null;
+}
+
+function summarizeProviderTaskValue(value: unknown): ProviderTaskValueSummary {
+  if (value === null || value === undefined) {
+    return { type: "null", keys: [], count: null, status: null, state: null };
+  }
+  if (Array.isArray(value)) {
+    return { type: "array", keys: [], count: value.length, status: null, state: null };
+  }
+  const record = asRecord(value);
+  if (record) {
+    return {
+      type: "object",
+      keys: safeDiagnosticKeys(record),
+      count: null,
+      status: safeDiagnosticLabel(record.status),
+      state: safeDiagnosticLabel(record.state),
+    };
+  }
+  return { type: typeof value === "string" ? "string" : "other", keys: [], count: null, status: null, state: null };
+}
+
+function hasKnownImageField(value: unknown, field: "url" | "b64_json" | "image_url"): boolean {
+  if (Array.isArray(value)) return value.some((item) => hasKnownImageField(item, field));
+  const record = asRecord(value);
+  return !!record && typeof record[field] === "string" && record[field].trim().length > 0;
+}
+
+function firstArrayItem(value: unknown): unknown {
+  return Array.isArray(value) ? value[0] : undefined;
+}
+
+function hasKnownDirectImageField(value: unknown, field: "url" | "b64_json" | "image_url" | "output"): boolean {
+  const record = asRecord(value);
+  return !!record && typeof record[field] === "string" && record[field].trim().length > 0;
+}
+
 function extractProviderError(payload: unknown): ExtractedProviderError {
-  if (!payload || Array.isArray(payload) || typeof payload !== "object") return {};
-  const record = payload as Record<string, unknown>;
+  const record = asRecord(payload);
+  if (!record) return {};
   const nestedError = record.error;
-  const nestedRecord =
-    nestedError && !Array.isArray(nestedError) && typeof nestedError === "object"
-      ? (nestedError as Record<string, unknown>)
-      : undefined;
+  const nestedRecord = asRecord(nestedError);
+  const response = asRecord(record.response);
+  const responseError = response?.error;
+  const responseErrorRecord = asRecord(responseError);
   const message =
     (typeof nestedError === "string" ? nestedError : undefined) ??
     (typeof nestedRecord?.message === "string" ? nestedRecord.message : undefined) ??
-    (typeof record.message === "string" ? record.message : undefined);
+    (typeof record.message === "string" ? record.message : undefined) ??
+    (typeof responseError === "string" ? responseError : undefined) ??
+    (typeof responseErrorRecord?.message === "string" ? responseErrorRecord.message : undefined);
   const code =
     (typeof nestedRecord?.code === "string" ? nestedRecord.code : undefined) ??
-    (typeof record.code === "string" ? record.code : undefined);
+    (typeof record.code === "string" ? record.code : undefined) ??
+    (typeof responseErrorRecord?.code === "string" ? responseErrorRecord.code : undefined);
   return { message, code };
+}
+
+function getCompletedImageData(payload: {
+  data?: unknown;
+  response?: unknown;
+  result?: unknown;
+}): unknown {
+  const response = asRecord(payload.response);
+  const result = asRecord(payload.result);
+  return response?.data ?? payload.data ?? result?.data;
+}
+
+function requireHttpsImages(images: ReturnType<typeof normalizeImageResults>) {
+  for (const image of images) {
+    if (image.kind === "url" && !image.url.startsWith("https://")) {
+      throw new ImageProviderError({
+        code: "INVALID_PROVIDER_IMAGE",
+        message: "供应商返回的图片地址必须使用 HTTPS。",
+        retryable: false,
+      });
+    }
+  }
+  return images;
 }
 
 function createCommonRequest(input: ImageGenerationInput, size: string) {
@@ -185,8 +374,6 @@ function createCommonRequest(input: ImageGenerationInput, size: string) {
     prompt: input.prompt,
     size,
     n: input.count,
-    response_format: "url",
-    output_format: "webp",
   });
 }
 
@@ -196,7 +383,15 @@ function createReferenceBlob(image: ImageGenerationInput["referenceImages"][numb
 }
 
 export class VibeLearningImageProvider implements ImageProvider {
+  readonly key = "vibelearning";
+  readonly capabilities = {
+    modes: ["text-to-image", "image-to-image"],
+    aspectRatios: ["1:1", "4:3", "3:4", "16:9", "9:16"],
+    qualities: ["1K", "2K", "4K"],
+  } as const;
   private readonly explicitEnv?: VibeLearningImageEnv;
+  private readonly apiKey?: string;
+  private readonly baseUrl?: string;
   private readonly fetchImpl: typeof fetch;
   private readonly maxReferenceImages?: number;
 
@@ -212,6 +407,8 @@ export class VibeLearningImageProvider implements ImageProvider {
       });
     }
     this.explicitEnv = options.env;
+    this.apiKey = options.apiKey;
+    this.baseUrl = options.baseUrl;
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
     this.maxReferenceImages = options.maxReferenceImages;
   }
@@ -227,6 +424,21 @@ export class VibeLearningImageProvider implements ImageProvider {
     return isImageToImageMode(task.mode)
       ? this.pollImageToImageTask(task.taskId)
       : this.pollTextToImageTask(task.taskId);
+  }
+
+  async getTask(task: Pick<ProviderTaskCreated, "taskId" | "mode">): Promise<ProviderTaskResult> {
+    return this.pollTask(task);
+  }
+
+  async diagnoseProviderTask(input: {
+    generationTaskId: string;
+    taskId: string;
+    mode: ProviderGenerationMode;
+  }): Promise<ProviderTaskDiagnostic> {
+    const normalizedTaskId = this.requireTaskId(input.taskId);
+    const configuration = resolveConfiguration({ env: this.explicitEnv, apiKey: this.apiKey, baseUrl: this.baseUrl });
+    const response = await this.fetchProviderTaskResponse(input.mode, normalizedTaskId, configuration);
+    return this.summarizeProviderTaskResponse(input.generationTaskId, input.mode, normalizedTaskId, response, configuration);
   }
 
   async createTextToImageTask(input: ImageGenerationInput): Promise<ProviderTaskCreated> {
@@ -306,7 +518,7 @@ export class VibeLearningImageProvider implements ImageProvider {
     body: BodyInit,
     headers?: HeadersInit,
   ): Promise<ProviderTaskCreated> {
-    const configuration = resolveConfiguration(this.explicitEnv);
+    const configuration = resolveConfiguration({ env: this.explicitEnv, apiKey: this.apiKey, baseUrl: this.baseUrl });
     const payload = await this.requestJson(
       TASK_PATHS[mode],
       {
@@ -335,13 +547,21 @@ export class VibeLearningImageProvider implements ImageProvider {
       });
     }
     const rawStatus = parsed.data.status ?? parsed.data.data?.status ?? "queued";
-    return { taskId, mode, status: normalizeTaskStatus(rawStatus) };
+    return { taskId, mode, status: normalizeVibeLearningTaskStatus(rawStatus) };
   }
 
   private async pollProviderTask(
     mode: ProviderGenerationMode,
     taskId: string,
   ): Promise<ProviderTaskResult> {
+    const normalizedTaskId = this.requireTaskId(taskId);
+
+    const configuration = resolveConfiguration({ env: this.explicitEnv, apiKey: this.apiKey, baseUrl: this.baseUrl });
+    const response = await this.fetchProviderTaskResponse(mode, normalizedTaskId, configuration);
+    return this.normalizeProviderTaskResponse(normalizedTaskId, response, configuration);
+  }
+
+  private requireTaskId(taskId: string): string {
     const normalizedTaskId = taskId.trim();
     if (!normalizedTaskId) {
       throw new ImageProviderError({
@@ -350,14 +570,68 @@ export class VibeLearningImageProvider implements ImageProvider {
         retryable: false,
       });
     }
+    return normalizedTaskId;
+  }
 
-    const configuration = resolveConfiguration(this.explicitEnv);
-    const payload = await this.requestJson(
-      `${TASK_PATHS[mode]}/${encodeURIComponent(normalizedTaskId)}`,
-      { method: "GET" },
-      configuration,
-    );
-    const parsed = vibeLearningTaskPollResponseSchema.safeParse(payload);
+  private async fetchProviderTaskResponse(
+    mode: ProviderGenerationMode,
+    taskId: string,
+    configuration: ResolvedConfiguration,
+  ): Promise<ProviderTaskHttpResponse> {
+    let response: Response;
+    try {
+      response = await this.fetchImpl(
+        `${configuration.apiBaseUrl}${TASK_PATHS[mode]}/${encodeURIComponent(taskId)}`,
+        { method: "GET", headers: { authorization: `Bearer ${configuration.apiKey}` } },
+      );
+    } catch (error) {
+      throw new ImageProviderError(
+        normalizeProviderError(error, {
+          apiKey: configuration.apiKey,
+          fallbackCode: "PROVIDER_NETWORK_ERROR",
+          fallbackMessage: "无法连接到 VibeLearning 图片服务。",
+          retryable: true,
+        }),
+        { cause: error },
+      );
+    }
+
+    try {
+      return { httpStatus: response.status, responseIsJson: true, payload: await response.json() };
+    } catch {
+      return { httpStatus: response.status, responseIsJson: false, payload: undefined };
+    }
+  }
+
+  private normalizeProviderTaskResponse(
+    normalizedTaskId: string,
+    response: ProviderTaskHttpResponse,
+    configuration: ResolvedConfiguration,
+  ): ProviderTaskResult {
+    if (response.httpStatus < 200 || response.httpStatus >= 300) {
+      const extractedError = extractProviderError(response.payload);
+      const message = extractedError.message
+        ? new Error(extractedError.message)
+        : new Error(`VibeLearning 图片服务返回 HTTP ${response.httpStatus}。`);
+      throw new ImageProviderError(
+        normalizeProviderError(message, {
+          apiKey: configuration.apiKey,
+          fallbackCode: "PROVIDER_HTTP_ERROR",
+          retryable: response.httpStatus === 429 || response.httpStatus >= 500,
+          httpStatus: response.httpStatus,
+          providerCode: extractedError.code,
+        }),
+      );
+    }
+    if (!response.responseIsJson) {
+      throw new ImageProviderError({
+        code: "INVALID_PROVIDER_RESPONSE",
+        message: "供应商返回了无法解析的 JSON 响应。",
+        retryable: false,
+      });
+    }
+
+    const parsed = vibeLearningTaskPollResponseSchema.safeParse(response.payload);
     if (!parsed.success) {
       throw new ImageProviderError({
         code: "INVALID_PROVIDER_RESPONSE",
@@ -366,12 +640,23 @@ export class VibeLearningImageProvider implements ImageProvider {
       });
     }
 
-    const status = normalizeTaskStatus(parsed.data.status);
+    const status = normalizeVibeLearningTaskStatus(parsed.data.status);
     if (status === "completed") {
+      let images;
+      try {
+        images = requireHttpsImages(
+          normalizeImageResults(getCompletedImageData(parsed.data), "image/webp"),
+        );
+      } catch (error) {
+        if (error instanceof ImageProviderError && error.code === "EMPTY_PROVIDER_RESULT") {
+          return { taskId: normalizedTaskId, status: "processing", images: [] };
+        }
+        throw error;
+      }
       return {
         taskId: normalizedTaskId,
         status,
-        images: normalizeImageResults(parsed.data.data, "image/webp"),
+        images,
       };
     }
     if (status === "failed") {
@@ -386,6 +671,112 @@ export class VibeLearningImageProvider implements ImageProvider {
       );
     }
     return { taskId: normalizedTaskId, status, images: [] };
+  }
+
+  private summarizeProviderTaskResponse(
+    generationTaskId: string,
+    mode: ProviderGenerationMode,
+    taskId: string,
+    response: ProviderTaskHttpResponse,
+    configuration: ResolvedConfiguration,
+  ): ProviderTaskDiagnostic {
+    const top = asRecord(response.payload);
+    const data = top?.data;
+    const dataRecord = asRecord(data);
+    const nestedData = dataRecord?.data;
+    const result = top?.result;
+    const resultRecord = asRecord(result);
+    const resultData = resultRecord?.data;
+    const providerResponse = top?.response;
+    const responseRecord = asRecord(providerResponse);
+    const responseItem = firstArrayItem(providerResponse);
+    const responseData = responseRecord?.data;
+    const responseOutput = responseRecord?.output;
+    const dataSummary = summarizeProviderTaskValue(data);
+    const nestedDataSummary = summarizeProviderTaskValue(nestedData);
+    const resultSummary = summarizeProviderTaskValue(result);
+    const resultDataSummary = summarizeProviderTaskValue(resultData);
+    const responseSummary = summarizeProviderTaskValue(providerResponse);
+    const responseItemSummary = summarizeProviderTaskValue(responseItem);
+    const responseDataSummary = summarizeProviderTaskValue(responseData);
+    const responseOutputSummary = summarizeProviderTaskValue(responseOutput);
+
+    let normalizedStatus: string | null = null;
+    let normalizationErrorCode: string | null = null;
+    try {
+      normalizedStatus = this.normalizeProviderTaskResponse(taskId, response, configuration).status;
+    } catch (error) {
+      normalizationErrorCode = error instanceof ImageProviderError ? error.code : "PROVIDER_DIAGNOSTIC_ERROR";
+    }
+
+    return {
+      generationTaskId,
+      provider: this.key,
+      providerTaskIdPresent: taskId.length > 0,
+      generationMode: mode,
+      httpStatus: response.httpStatus,
+      responseIsJson: response.responseIsJson,
+      topLevelKeys: top ? safeDiagnosticKeys(top) : [],
+      topStatus: safeDiagnosticLabel(top?.status),
+      topState: safeDiagnosticLabel(top?.state),
+      topCode: typeof top?.code === "number" ? top.code : safeDiagnosticLabel(top?.code),
+      dataType: dataSummary.type,
+      dataKeys: dataSummary.keys,
+      dataCount: dataSummary.count,
+      dataStatus: dataSummary.status,
+      dataState: dataSummary.state,
+      nestedDataType: nestedDataSummary.type,
+      nestedDataKeys: nestedDataSummary.keys,
+      nestedDataCount: nestedDataSummary.count,
+      resultType: resultSummary.type,
+      resultKeys: resultSummary.keys,
+      resultStatus: resultSummary.status,
+      resultState: resultSummary.state,
+      resultDataType: resultDataSummary.type,
+      resultDataKeys: resultDataSummary.keys,
+      resultDataCount: resultDataSummary.count,
+      responseType: responseSummary.type,
+      responseKeys: responseSummary.keys,
+      responseCount: responseSummary.count,
+      responseStatus: responseSummary.status,
+      responseState: responseSummary.state,
+      responseItemType: responseItemSummary.type,
+      responseItemKeys: responseItemSummary.keys,
+      responseDataType: responseDataSummary.type,
+      responseDataKeys: responseDataSummary.keys,
+      responseDataCount: responseDataSummary.count,
+      responseOutputType: responseOutputSummary.type,
+      responseOutputKeys: responseOutputSummary.keys,
+      responseOutputCount: responseOutputSummary.count,
+      knownResultFlags: {
+        topUrl: hasKnownImageField(top, "url"),
+        topB64Json: hasKnownImageField(top, "b64_json"),
+        dataUrl: hasKnownImageField(data, "url"),
+        dataB64Json: hasKnownImageField(data, "b64_json"),
+        dataDataUrl: hasKnownImageField(nestedData, "url"),
+        dataDataB64Json: hasKnownImageField(nestedData, "b64_json"),
+        resultUrl: hasKnownImageField(result, "url"),
+        resultB64Json: hasKnownImageField(result, "b64_json"),
+        resultDataUrl: hasKnownImageField(resultData, "url"),
+        resultDataB64Json: hasKnownImageField(resultData, "b64_json"),
+        responseUrl: hasKnownDirectImageField(providerResponse, "url"),
+        responseB64Json: hasKnownDirectImageField(providerResponse, "b64_json"),
+        responseImageUrl: hasKnownDirectImageField(providerResponse, "image_url"),
+        responseOutputUrl: hasKnownDirectImageField(Array.isArray(responseOutput) ? responseOutput[0] : responseOutput, "url"),
+        responseItemUrl: hasKnownDirectImageField(responseItem, "url"),
+        responseItemB64Json: hasKnownDirectImageField(responseItem, "b64_json"),
+        responseItemImageUrl: hasKnownDirectImageField(responseItem, "image_url"),
+        responseItemOutputUrl: hasKnownDirectImageField(responseItem, "output"),
+        responseDataUrl: hasKnownDirectImageField(Array.isArray(responseData) ? responseData[0] : responseData, "url"),
+        responseDataB64Json: hasKnownDirectImageField(Array.isArray(responseData) ? responseData[0] : responseData, "b64_json"),
+        responseDataImageUrl: hasKnownDirectImageField(Array.isArray(responseData) ? responseData[0] : responseData, "image_url"),
+        responseDataOutputUrl: hasKnownDirectImageField(Array.isArray(responseData) ? responseData[0] : responseData, "output"),
+        responseOutputB64Json: hasKnownDirectImageField(Array.isArray(responseOutput) ? responseOutput[0] : responseOutput, "b64_json"),
+        responseOutputImageUrl: hasKnownDirectImageField(Array.isArray(responseOutput) ? responseOutput[0] : responseOutput, "image_url"),
+      },
+      normalizedStatus,
+      normalizationErrorCode,
+    };
   }
 
   private async requestJson(

@@ -22,6 +22,7 @@ import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
 import { Route as ApiAdminVerifyAccessPasswordRouteImport } from './routes/api/admin/verify-access-password'
+import { Route as ApiAdminProviderTaskDiagnosticRouteImport } from './routes/api/admin/provider-task-diagnostic'
 
 const InspirationRoute = InspirationRouteImport.update({
   id: '/inspiration',
@@ -90,12 +91,19 @@ const ApiAdminVerifyAccessPasswordRoute =
     path: '/api/admin/verify-access-password',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiAdminProviderTaskDiagnosticRoute =
+  ApiAdminProviderTaskDiagnosticRouteImport.update({
+    id: '/api/admin/provider-task-diagnostic',
+    path: '/api/admin/provider-task-diagnostic',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/disclaimer': typeof DisclaimerRoute
   '/inspiration': typeof InspirationRoute
   '/api/download-image': typeof ApiDownloadImageRoute
+  '/api/admin/provider-task-diagnostic': typeof ApiAdminProviderTaskDiagnosticRoute
   '/api/admin/verify-access-password': typeof ApiAdminVerifyAccessPasswordRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -111,6 +119,7 @@ export interface FileRoutesByTo {
   '/disclaimer': typeof DisclaimerRoute
   '/inspiration': typeof InspirationRoute
   '/api/download-image': typeof ApiDownloadImageRoute
+  '/api/admin/provider-task-diagnostic': typeof ApiAdminProviderTaskDiagnosticRoute
   '/api/admin/verify-access-password': typeof ApiAdminVerifyAccessPasswordRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -127,6 +136,7 @@ export interface FileRoutesById {
   '/disclaimer': typeof DisclaimerRoute
   '/inspiration': typeof InspirationRoute
   '/api/download-image': typeof ApiDownloadImageRoute
+  '/api/admin/provider-task-diagnostic': typeof ApiAdminProviderTaskDiagnosticRoute
   '/api/admin/verify-access-password': typeof ApiAdminVerifyAccessPasswordRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -144,6 +154,7 @@ export interface FileRouteTypes {
     | '/disclaimer'
     | '/inspiration'
     | '/api/download-image'
+    | '/api/admin/provider-task-diagnostic'
     | '/api/admin/verify-access-password'
     | '/api/auth/login'
     | '/api/auth/logout'
@@ -159,6 +170,7 @@ export interface FileRouteTypes {
     | '/disclaimer'
     | '/inspiration'
     | '/api/download-image'
+    | '/api/admin/provider-task-diagnostic'
     | '/api/admin/verify-access-password'
     | '/api/auth/login'
     | '/api/auth/logout'
@@ -174,6 +186,7 @@ export interface FileRouteTypes {
     | '/disclaimer'
     | '/inspiration'
     | '/api/download-image'
+    | '/api/admin/provider-task-diagnostic'
     | '/api/admin/verify-access-password'
     | '/api/auth/login'
     | '/api/auth/logout'
@@ -190,6 +203,7 @@ export interface RootRouteChildren {
   DisclaimerRoute: typeof DisclaimerRoute
   InspirationRoute: typeof InspirationRoute
   ApiDownloadImageRoute: typeof ApiDownloadImageRoute
+  ApiAdminProviderTaskDiagnosticRoute: typeof ApiAdminProviderTaskDiagnosticRoute
   ApiAdminVerifyAccessPasswordRoute: typeof ApiAdminVerifyAccessPasswordRoute
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
@@ -294,6 +308,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminVerifyAccessPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/admin/provider-task-diagnostic': {
+      id: '/api/admin/provider-task-diagnostic'
+      path: '/api/admin/provider-task-diagnostic'
+      fullPath: '/api/admin/provider-task-diagnostic'
+      preLoaderRoute: typeof ApiAdminProviderTaskDiagnosticRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -302,6 +323,7 @@ const rootRouteChildren: RootRouteChildren = {
   DisclaimerRoute: DisclaimerRoute,
   InspirationRoute: InspirationRoute,
   ApiDownloadImageRoute: ApiDownloadImageRoute,
+  ApiAdminProviderTaskDiagnosticRoute: ApiAdminProviderTaskDiagnosticRoute,
   ApiAdminVerifyAccessPasswordRoute: ApiAdminVerifyAccessPasswordRoute,
   ApiAuthLoginRoute: ApiAuthLoginRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,

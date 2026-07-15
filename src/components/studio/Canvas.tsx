@@ -1,6 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Download, Copy, Maximize2, Sparkles, ArrowUpRight, X, Clock, ImageIcon, ListOrdered, Loader2, CheckCircle2, RotateCcw } from "lucide-react";
+import {
+  Download,
+  Copy,
+  Maximize2,
+  Sparkles,
+  ArrowUpRight,
+  X,
+  Clock,
+  ImageIcon,
+  ListOrdered,
+  Loader2,
+  CheckCircle2,
+  RotateCcw,
+} from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -58,7 +71,6 @@ function timeAgo(iso: string) {
   return `${d} 天前`;
 }
 
-
 type Props = {
   userId?: string | null;
   generating: boolean;
@@ -70,9 +82,13 @@ type Props = {
   historyOpen: boolean;
   onHistoryOpenChange: (v: boolean) => void;
   onReuseCurrent: () => void;
-  onSelectHistory: (url: string, prompt: string, model: string, reuseSource?: { modelKey?: string | null; inputParams?: Record<string, any> | null }) => void;
+  onSelectHistory: (
+    url: string,
+    prompt: string,
+    model: string,
+    reuseSource?: { modelKey?: string | null; inputParams?: Record<string, any> | null },
+  ) => void;
 };
-
 
 function safeDecodeFilename(value: string) {
   try {
@@ -99,7 +115,9 @@ function getDownloadFilename(url: string, fallback = "mumo-generated-image.png")
 async function downloadImage(url: string, fallbackFilename = "mumo-generated-image.png") {
   const filename = getDownloadFilename(url, fallbackFilename);
   try {
-    const proxyUrl = `/api/download-image?url=${encodeURIComponent(url)}`;
+    const proxyUrl = url.startsWith("/api/download-image?taskId=")
+      ? url
+      : `/api/download-image?url=${encodeURIComponent(url)}`;
     const res = await fetch(proxyUrl);
     if (!res.ok) throw new Error(String(res.status));
     const blob = await res.blob();
@@ -127,7 +145,18 @@ async function copyToClipboard(text: string) {
   }
 }
 
-export function Canvas({ userId, generating, generatedUrl, currentPrompt, currentModel, progress, historyOpen, onHistoryOpenChange, onReuseCurrent, onSelectHistory }: Props) {
+export function Canvas({
+  userId,
+  generating,
+  generatedUrl,
+  currentPrompt,
+  currentModel,
+  progress,
+  historyOpen,
+  onHistoryOpenChange,
+  onReuseCurrent,
+  onSelectHistory,
+}: Props) {
   const [lightbox, setLightbox] = useState<HistoryItem | null>(null);
   const [heroLightbox, setHeroLightbox] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -148,10 +177,18 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
   const hasMoreRef = useRef(true);
   const userIdRef = useRef<string | null | undefined>(userId);
   const lastHistoryResetAtRef = useRef(0);
-  useEffect(() => { historyRef.current = history; }, [history]);
-  useEffect(() => { totalRef.current = total; }, [total]);
-  useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
-  useEffect(() => { userIdRef.current = userId; }, [userId]);
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
+  useEffect(() => {
+    totalRef.current = total;
+  }, [total]);
+  useEffect(() => {
+    hasMoreRef.current = hasMore;
+  }, [hasMore]);
+  useEffect(() => {
+    userIdRef.current = userId;
+  }, [userId]);
 
   useEffect(() => {
     inFlightRef.current = false;
@@ -173,66 +210,74 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
     setHeroLightbox(false);
   }, [userId]);
 
-  const loadHistory = useCallback(async (mode: "reset" | "append" = "reset") => {
-    const requestUserId = userIdRef.current;
-    if (!requestUserId) return;
-    if (inFlightRef.current) return;
-    if (mode === "append") {
-      if (!hasMoreRef.current) return;
-      if (totalRef.current > 0 && rawLoadedCountRef.current >= totalRef.current) return;
-    }
-    inFlightRef.current = true;
-    if (mode === "reset") {
-      setLoadingHistory(true);
-      setHistoryError(null);
-      setHasMore(true);
-      hasMoreRef.current = true;
-      rawLoadedCountRef.current = 0;
-    } else {
-      setLoadingMore(true);
-    }
-    try {
-      const offset = mode === "append" ? rawLoadedCountRef.current : 0;
-      const res = (await fetchHistory({ data: { limit: PAGE_SIZE, offset } })) as {
-        items: HistoryItem[]; total?: number; limit: number; offset: number; maxKeep?: number; maxDays?: number; isAdmin?: boolean;
-      };
-      if (userIdRef.current !== requestUserId) return;
-      const items = res.items ?? [];
-      const returnedTotal = Number(res.total ?? 0);
-      const nextRawLoadedCount = offset + items.length;
-      const nextHasMore = returnedTotal > 0
-        ? nextRawLoadedCount < returnedTotal
-        : items.length >= PAGE_SIZE;
-      rawLoadedCountRef.current = nextRawLoadedCount;
-      setTotal(returnedTotal);
-      setHasMore(nextHasMore);
-      hasMoreRef.current = nextHasMore;
-      if (res.maxKeep) setMaxKeep(res.maxKeep);
-      if (res.maxDays) setMaxDays(res.maxDays);
-      if (typeof res.isAdmin === "boolean") setIsAdmin(res.isAdmin);
-      setHistory((prev) => {
-        const base = mode === "append" ? prev : [];
-        // 双保险：按图片 URL 去重，杜绝同一张图片重复展示
-        const seen = new Set(base.map(normalizeHistoryImageKey));
-        const merged = [...base];
-        for (const it of items) {
-          const key = normalizeHistoryImageKey(it);
-          if (seen.has(key)) continue;
-          seen.add(key);
-          merged.push(it);
-        }
-        return merged;
-      });
-      if (mode === "reset") lastHistoryResetAtRef.current = Date.now();
-    } catch (e: any) {
-      console.warn("[history] load failed", e);
-      if (mode === "reset") setHistoryError(e?.message ?? "加载失败，请稍后再试");
-    } finally {
-      setLoadingHistory(false);
-      setLoadingMore(false);
-      inFlightRef.current = false;
-    }
-  }, [fetchHistory]);
+  const loadHistory = useCallback(
+    async (mode: "reset" | "append" = "reset") => {
+      const requestUserId = userIdRef.current;
+      if (!requestUserId) return;
+      if (inFlightRef.current) return;
+      if (mode === "append") {
+        if (!hasMoreRef.current) return;
+        if (totalRef.current > 0 && rawLoadedCountRef.current >= totalRef.current) return;
+      }
+      inFlightRef.current = true;
+      if (mode === "reset") {
+        setLoadingHistory(true);
+        setHistoryError(null);
+        setHasMore(true);
+        hasMoreRef.current = true;
+        rawLoadedCountRef.current = 0;
+      } else {
+        setLoadingMore(true);
+      }
+      try {
+        const offset = mode === "append" ? rawLoadedCountRef.current : 0;
+        const res = (await fetchHistory({ data: { limit: PAGE_SIZE, offset } })) as {
+          items: HistoryItem[];
+          total?: number;
+          limit: number;
+          offset: number;
+          maxKeep?: number;
+          maxDays?: number;
+          isAdmin?: boolean;
+        };
+        if (userIdRef.current !== requestUserId) return;
+        const items = res.items ?? [];
+        const returnedTotal = Number(res.total ?? 0);
+        const nextRawLoadedCount = offset + items.length;
+        const nextHasMore =
+          returnedTotal > 0 ? nextRawLoadedCount < returnedTotal : items.length >= PAGE_SIZE;
+        rawLoadedCountRef.current = nextRawLoadedCount;
+        setTotal(returnedTotal);
+        setHasMore(nextHasMore);
+        hasMoreRef.current = nextHasMore;
+        if (res.maxKeep) setMaxKeep(res.maxKeep);
+        if (res.maxDays) setMaxDays(res.maxDays);
+        if (typeof res.isAdmin === "boolean") setIsAdmin(res.isAdmin);
+        setHistory((prev) => {
+          const base = mode === "append" ? prev : [];
+          // 双保险：按图片 URL 去重，杜绝同一张图片重复展示
+          const seen = new Set(base.map(normalizeHistoryImageKey));
+          const merged = [...base];
+          for (const it of items) {
+            const key = normalizeHistoryImageKey(it);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            merged.push(it);
+          }
+          return merged;
+        });
+        if (mode === "reset") lastHistoryResetAtRef.current = Date.now();
+      } catch (e: any) {
+        console.warn("[history] load failed", e);
+        if (mode === "reset") setHistoryError(e?.message ?? "加载失败，请稍后再试");
+      } finally {
+        setLoadingHistory(false);
+        setLoadingMore(false);
+        inFlightRef.current = false;
+      }
+    },
+    [fetchHistory],
+  );
 
   useEffect(() => {
     if (!historyOpen) return;
@@ -248,15 +293,18 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
   }, [generatedUrl]);
 
   // 无限滚动：接近滚动容器底部时加载下一页
-  const handleHistoryScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    if (loadingHistory || loadingMore || historyError) return;
-    if (!hasMore) return;
-    if (totalRef.current > 0 && rawLoadedCountRef.current >= totalRef.current) return;
-    const el = e.currentTarget;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 300) {
-      loadHistory("append");
-    }
-  }, [loadingHistory, loadingMore, historyError, hasMore, loadHistory]);
+  const handleHistoryScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      if (loadingHistory || loadingMore || historyError) return;
+      if (!hasMore) return;
+      if (totalRef.current > 0 && rawLoadedCountRef.current >= totalRef.current) return;
+      const el = e.currentTarget;
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 300) {
+        loadHistory("append");
+      }
+    },
+    [loadingHistory, loadingMore, historyError, hasMore, loadHistory],
+  );
 
   const heroPrompt = currentPrompt ?? "";
   const heroModel = currentModel ?? "当前模型";
@@ -274,14 +322,19 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
             onClick={() => generatedUrl && downloadImage(generatedUrl, `mumo-${Date.now()}.png`)}
             className="mumo-neon-button flex h-8 items-center gap-1.5 rounded-xl px-3.5 text-[10px] font-semibold text-white transition-transform enabled:hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <Download className="h-3.5 w-3.5" />下载
+            <Download className="h-3.5 w-3.5" />
+            下载
           </button>
         </div>
         {generating ? (
           <QueueProgress progress={progress ?? null} />
         ) : generatedUrl ? (
           <>
-            <img src={generatedUrl} alt="生成结果" className="h-full w-full object-contain bg-slate-100 dark:bg-[#101923]" />
+            <img
+              src={generatedUrl}
+              alt="生成结果"
+              className="h-full w-full object-contain bg-slate-100 dark:bg-[#101923]"
+            />
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30 opacity-0 transition-opacity group-hover:opacity-100" />
             <div className="absolute left-3 top-3 z-20 flex items-center gap-1.5 opacity-70 transition-opacity group-hover:opacity-100">
               <HeroAction label="查看大图" onClick={() => setHeroLightbox(true)}>
@@ -297,7 +350,9 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
             {heroPrompt && (
               <div className="absolute inset-x-3 bottom-3 opacity-0 transition-opacity group-hover:opacity-100">
                 <div className="glass max-w-2xl rounded-xl px-3 py-2">
-                  <p className="line-clamp-2 text-[11px] leading-snug text-foreground/90">{heroPrompt}</p>
+                  <p className="line-clamp-2 text-[11px] leading-snug text-foreground/90">
+                    {heroPrompt}
+                  </p>
                 </div>
               </div>
             )}
@@ -333,19 +388,29 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
                 : `最近历史记录 · 重复图片已合并展示 · 最多显示 ${maxKeep} 张`}
             </p>
           </div>
-          <div ref={scrollContainerRef} onScroll={handleHistoryScroll} className="scrollbar-thin h-[calc(100vh-72px)] overflow-y-auto p-4">
+          <div
+            ref={scrollContainerRef}
+            onScroll={handleHistoryScroll}
+            className="scrollbar-thin h-[calc(100vh-72px)] overflow-y-auto p-4"
+          >
             {loadingHistory ? (
-              <div className="py-20 text-center text-xs text-muted-foreground">正在加载历史记录…</div>
+              <div className="py-20 text-center text-xs text-muted-foreground">
+                正在加载历史记录…
+              </div>
             ) : historyError ? (
               <div className="py-20 text-center text-xs text-muted-foreground">
                 <div className="mb-3">{historyError}</div>
                 <button
                   onClick={() => loadHistory("reset")}
                   className="rounded-md border border-border px-3 py-1.5 text-[11px] hover:border-primary/60 hover:text-primary"
-                >重试</button>
+                >
+                  重试
+                </button>
               </div>
             ) : history.length === 0 ? (
-              <div className="py-20 text-center text-xs text-muted-foreground">还没有历史作品，去生成第一张吧</div>
+              <div className="py-20 text-center text-xs text-muted-foreground">
+                还没有历史作品，去生成第一张吧
+              </div>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3">
@@ -383,33 +448,52 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
                         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/0 opacity-0 transition-opacity group-hover:opacity-100" />
                         {isAdmin && (
                           <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent px-2 py-1">
-                            <span className="line-clamp-1 text-[9px] font-medium text-white/90" title={item.authorEmail ?? item.userId ?? ""}>
+                            <span
+                              className="line-clamp-1 text-[9px] font-medium text-white/90"
+                              title={item.authorEmail ?? item.userId ?? ""}
+                            >
                               {item.authorEmail || item.userId?.slice(0, 8) || "-"}
                             </span>
                           </div>
                         )}
                         <div className="absolute left-2 top-2 opacity-0 transition-opacity group-hover:opacity-100">
-                          <span className="glass rounded-full px-1.5 py-0.5 text-[8px] font-semibold uppercase text-primary">{item.model.split(" ")[0]}</span>
+                          <span className="glass rounded-full px-1.5 py-0.5 text-[8px] font-semibold uppercase text-primary">
+                            {item.model.split(" ")[0]}
+                          </span>
                         </div>
                         <div className="absolute inset-x-2 bottom-2 flex items-end justify-between gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                          <span className="font-mono text-[9px] text-foreground/70">{timeAgo(item.createdAt)}</span>
+                          <span className="font-mono text-[9px] text-foreground/70">
+                            {timeAgo(item.createdAt)}
+                          </span>
                           <div className="flex items-center gap-1">
                             <button
-                              onClick={(e) => { e.stopPropagation(); copyToClipboard(item.prompt ?? ""); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copyToClipboard(item.prompt ?? "");
+                              }}
                               title="复制提示词"
                               className="glass flex h-6 w-6 items-center justify-center rounded-md text-foreground/90 hover:bg-primary/20 hover:text-primary"
                             >
                               <Copy className="h-2.5 w-2.5" />
                             </button>
                             <button
-                              onClick={(e) => { e.stopPropagation(); downloadImage(item.originalImageUrl, `mumo-${item.model}-${item.id}.png`); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                downloadImage(
+                                  item.originalImageUrl,
+                                  `mumo-${item.model}-${item.id}.png`,
+                                );
+                              }}
                               title="下载原图"
                               className="glass flex h-6 w-6 items-center justify-center rounded-md text-foreground/90 hover:bg-primary/20 hover:text-primary"
                             >
                               <Download className="h-2.5 w-2.5" />
                             </button>
                             <button
-                              onClick={(e) => { e.stopPropagation(); setLightbox(item); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLightbox(item);
+                              }}
                               title="查看大图"
                               className="glass flex h-6 w-6 items-center justify-center rounded-md text-foreground/90 hover:bg-primary/20 hover:text-primary"
                             >
@@ -423,10 +507,14 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
                 </div>
                 <div className="h-8" />
                 {loadingMore && (
-                  <div className="py-3 text-center text-[11px] text-muted-foreground">正在加载更多…</div>
+                  <div className="py-3 text-center text-[11px] text-muted-foreground">
+                    正在加载更多…
+                  </div>
                 )}
                 {!loadingMore && !hasMore && history.length > 0 && (
-                  <div className="py-3 text-center text-[10px] text-muted-foreground/70">没有更多历史记录了</div>
+                  <div className="py-3 text-center text-[10px] text-muted-foreground/70">
+                    没有更多历史记录了
+                  </div>
                 )}
               </>
             )}
@@ -456,8 +544,15 @@ export function Canvas({ userId, generating, generatedUrl, currentPrompt, curren
   );
 }
 
-
-function HeroAction({ children, label, onClick }: { children: React.ReactNode; label: string; onClick: () => void }) {
+function HeroAction({
+  children,
+  label,
+  onClick,
+}: {
+  children: React.ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
@@ -480,10 +575,18 @@ function EmptyPlaceholder() {
         <ImageIcon className="h-9 w-9 text-slate-400 dark:text-slate-500" strokeWidth={1.25} />
       </div>
       <div className="relative max-w-sm px-6 text-center">
-        <div className="text-base font-semibold tracking-wide text-slate-700 dark:text-slate-200">让商品创意成为专业视觉</div>
-        <div className="mt-2 text-xs font-light leading-5 text-slate-400 dark:text-slate-500">在左侧选择商品类型并输入画面描述<br />适用于电商主图、商品场景与品牌内容</div>
+        <div className="text-base font-semibold tracking-wide text-slate-700 dark:text-slate-200">
+          让商品创意成为专业视觉
+        </div>
+        <div className="mt-2 text-xs font-light leading-5 text-slate-400 dark:text-slate-500">
+          在左侧选择商品类型并输入画面描述
+          <br />
+          适用于电商主图、商品场景与品牌内容
+        </div>
       </div>
-      <span className="relative rounded-full border border-[#bca16b]/20 bg-[#eadfc8]/25 px-3 py-1.5 text-[9px] tracking-[0.18em] text-[#846f48]">MUMO COMMERCE CANVAS</span>
+      <span className="relative rounded-full border border-[#bca16b]/20 bg-[#eadfc8]/25 px-3 py-1.5 text-[9px] tracking-[0.18em] text-[#846f48]">
+        MUMO COMMERCE CANVAS
+      </span>
     </div>
   );
 }
@@ -575,15 +678,27 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
   const LONG_WAIT_TIP = "复杂画面生成需要一点时间，请保持页面打开";
   const [tipIdx, setTipIdx] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => {
-      setTipIdx((i) => (i + 1 + Math.floor(Math.random() * (FRIENDLY_TIPS.length - 1))) % FRIENDLY_TIPS.length);
-    }, 3500 + Math.floor(Math.random() * 1500));
+    const id = setInterval(
+      () => {
+        setTipIdx(
+          (i) =>
+            (i + 1 + Math.floor(Math.random() * (FRIENDLY_TIPS.length - 1))) % FRIENDLY_TIPS.length,
+        );
+      },
+      3500 + Math.floor(Math.random() * 1500),
+    );
     return () => clearInterval(id);
   }, []);
   const currentTip = elapsed > 45 ? LONG_WAIT_TIP : FRIENDLY_TIPS[tipIdx];
 
   const stageLabel =
-    stage === "rendering" ? "生成中" : stage === "polling" ? "网络重试" : stage === "submitting" ? "提交中" : "排队中";
+    stage === "rendering"
+      ? "生成中"
+      : stage === "polling"
+        ? "网络重试"
+        : stage === "submitting"
+          ? "提交中"
+          : "排队中";
 
   const steps: Array<{ key: GenProgress["stage"]; label: string }> = [
     { key: "submitting", label: "提交" },
@@ -632,7 +747,9 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
                   <span className="text-[#a4874f]/55">{String(idx).padStart(4, "0")}</span>
                   <span className="mx-2 text-slate-400/35">│</span>
                   <span>{line}</span>
-                  {isLast && <span className="ml-1 inline-block h-3 w-1.5 -mb-[2px] animate-pulse bg-slate-500/60" />}
+                  {isLast && (
+                    <span className="ml-1 inline-block h-3 w-1.5 -mb-[2px] animate-pulse bg-slate-500/60" />
+                  )}
                 </div>
               );
             })}
@@ -646,71 +763,103 @@ function QueueProgress({ progress }: { progress: GenProgress | null }) {
       <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/45 to-transparent" />
       <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 px-6">
         <div className="glass-elevated flex w-full max-w-md flex-col items-center gap-5 rounded-2xl border border-white/85 bg-white/58 px-6 py-6 shadow-elevated backdrop-blur-2xl dark:border-white/10 dark:bg-[#1c2a3a]/72">
-        <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-aurora shadow-glow">
-          <Sparkles className="h-7 w-7 animate-pulse text-primary-foreground" />
-        </div>
-
-        {/* Stage badge */}
-        <div className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1">
-          <ListOrdered className="h-3.5 w-3.5 text-primary" />
-          <span className="text-[11px] font-semibold tracking-wide text-primary">{stageLabel}</span>
-          <Loader2 className="h-3 w-3 animate-spin text-primary" />
-        </div>
-
-        {/* 主信息：排队位次 / 生成百分比 */}
-        {stage === "rendering" ? (
-          <div className="text-center">
-            <div className="font-display text-3xl font-semibold tracking-tight text-foreground">{Math.round(pct)}%</div>
-            <div className="mt-1 text-xs font-light text-muted-foreground transition-opacity duration-500">{currentTip}</div>
+          <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-aurora shadow-glow">
+            <Sparkles className="h-7 w-7 animate-pulse text-primary-foreground" />
           </div>
-        ) : (
-          <div className="text-center">
-            <div className="font-display text-3xl font-semibold tracking-tight text-foreground">
-              正在排队 · 第 <span className="text-primary">{queuePos}</span> 位
-            </div>
-            <div className="mt-1 text-xs font-light text-muted-foreground transition-opacity duration-500">
-              {currentTip}
-            </div>
+
+          {/* Stage badge */}
+          <div className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1">
+            <ListOrdered className="h-3.5 w-3.5 text-primary" />
+            <span className="text-[11px] font-semibold tracking-wide text-primary">
+              {stageLabel}
+            </span>
+            <Loader2 className="h-3 w-3 animate-spin text-primary" />
           </div>
-        )}
 
-        {/* 进度条 */}
-        <div className="h-2 w-full max-w-md overflow-hidden rounded-full bg-slate-300/30 dark:bg-white/[0.07]">
-          <div
-            className="h-full rounded-full bg-gradient-aurora shadow-glow transition-all duration-700 ease-out"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-
-        {/* Steps tracker */}
-        <div className="flex w-full max-w-md items-center justify-between gap-2">
-          {steps.map((s, i) => {
-            const done = i < stageIndex;
-            const active = i === stageIndex;
-            return (
-              <div key={s.key} className="flex flex-1 items-center gap-2">
-                <div className={`flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-semibold transition-colors ${done ? "border-primary bg-primary text-primary-foreground" : active ? "border-primary bg-primary/10 text-primary" : "border-border bg-white/45 text-muted-foreground"}`}>
-                  {done ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
-                </div>
-                <span className={`text-[11px] ${active ? "text-foreground" : done ? "text-foreground/80" : "text-muted-foreground"}`}>{s.label}</span>
-                {i < steps.length - 1 && <div className={`mx-1 h-px flex-1 ${done ? "bg-primary" : "bg-border"}`} />}
+          {/* 主信息：排队位次 / 生成百分比 */}
+          {stage === "rendering" ? (
+            <div className="text-center">
+              <div className="font-display text-3xl font-semibold tracking-tight text-foreground">
+                {Math.round(pct)}%
               </div>
-            );
-          })}
-        </div>
+              <div className="mt-1 text-xs font-light text-muted-foreground transition-opacity duration-500">
+                {currentTip}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center">
+              <div className="font-display text-3xl font-semibold tracking-tight text-foreground">
+                正在排队 · 第 <span className="text-primary">{queuePos}</span> 位
+              </div>
+              <div className="mt-1 text-xs font-light text-muted-foreground transition-opacity duration-500">
+                {currentTip}
+              </div>
+            </div>
+          )}
 
-        {/* Meta line（不显示具体耗时，仅保留任务编号供排查） */}
-        <div className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
-          {progress?.taskId ? <span>任务 {progress.taskId.slice(0, 8)}…</span> : <span>正在准备本次视觉创作…</span>}
-        </div>
-        <div className="text-[10px] font-light text-slate-400">您可以继续浏览历史记录，结果会在这里自动显示</div>
+          {/* 进度条 */}
+          <div className="h-2 w-full max-w-md overflow-hidden rounded-full bg-slate-300/30 dark:bg-white/[0.07]">
+            <div
+              className="h-full rounded-full bg-gradient-aurora shadow-glow transition-all duration-700 ease-out"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+
+          {/* Steps tracker */}
+          <div className="flex w-full max-w-md items-center justify-between gap-2">
+            {steps.map((s, i) => {
+              const done = i < stageIndex;
+              const active = i === stageIndex;
+              return (
+                <div key={s.key} className="flex flex-1 items-center gap-2">
+                  <div
+                    className={`flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-semibold transition-colors ${done ? "border-primary bg-primary text-primary-foreground" : active ? "border-primary bg-primary/10 text-primary" : "border-border bg-white/45 text-muted-foreground"}`}
+                  >
+                    {done ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
+                  </div>
+                  <span
+                    className={`text-[11px] ${active ? "text-foreground" : done ? "text-foreground/80" : "text-muted-foreground"}`}
+                  >
+                    {s.label}
+                  </span>
+                  {i < steps.length - 1 && (
+                    <div className={`mx-1 h-px flex-1 ${done ? "bg-primary" : "bg-border"}`} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Meta line（不显示具体耗时，仅保留任务编号供排查） */}
+          <div className="flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
+            {progress?.taskId ? (
+              <span>任务 {progress.taskId.slice(0, 8)}…</span>
+            ) : (
+              <span>正在准备本次视觉创作…</span>
+            )}
+          </div>
+          <div className="text-[10px] font-light text-slate-400">
+            您可以继续浏览历史记录，结果会在这里自动显示
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function Lightbox({ src, prompt, model, filename, onClose }: { src: string; prompt: string; model: string; filename: string; onClose: () => void }) {
+function Lightbox({
+  src,
+  prompt,
+  model,
+  filename,
+  onClose,
+}: {
+  src: string;
+  prompt: string;
+  model: string;
+  filename: string;
+  onClose: () => void;
+}) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -736,13 +885,18 @@ function Lightbox({ src, prompt, model, filename, onClose }: { src: string; prom
       }}
       className="fixed inset-0 z-[1000] flex items-center justify-center bg-background/80 p-6 backdrop-blur-xl animate-[fade-in_0.2s_ease-out]"
     >
-      <div onClick={(e) => e.stopPropagation()} className="glass-elevated relative flex max-h-[90vh] w-full max-w-5xl gap-4 overflow-hidden rounded-2xl p-2">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="glass-elevated relative flex max-h-[90vh] w-full max-w-5xl gap-4 overflow-hidden rounded-2xl p-2"
+      >
         <div className="flex-1 overflow-hidden rounded-xl bg-black">
           <img src={src} alt={prompt} className="h-full w-full object-contain" />
         </div>
         <div className="flex w-72 flex-col p-4">
           <div className="flex items-center justify-between">
-            <span className="self-start rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold tracking-wider text-primary">{model}</span>
+            <span className="self-start rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold tracking-wider text-primary">
+              {model}
+            </span>
             <button
               onPointerDown={(e) => {
                 e.preventDefault();
@@ -762,8 +916,12 @@ function Lightbox({ src, prompt, model, filename, onClose }: { src: string; prom
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="mt-4 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">提示词</div>
-          <p className="mt-2 max-h-60 overflow-y-auto text-sm font-light leading-relaxed">{prompt || "（无提示词）"}</p>
+          <div className="mt-4 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            提示词
+          </div>
+          <p className="mt-2 max-h-60 overflow-y-auto text-sm font-light leading-relaxed">
+            {prompt || "（无提示词）"}
+          </p>
           <div className="mt-auto flex flex-col gap-2 pt-4">
             <button
               onClick={() => downloadImage(src, filename)}

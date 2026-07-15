@@ -73,16 +73,59 @@ describe("VibeLearningImageProvider", () => {
       prompt: "a quiet reading room",
       size: "1024x1024",
       n: 1,
-      response_format: "url",
-      output_format: "webp",
     });
   });
 
-  test("uses image for one image-to-image reference", async () => {
+  test("uses the official default base URL and forwards any configured provider model", async () => {
+    const mock = mockFetch(jsonResponse({ id: "default-base-task" }));
+    const provider = new VibeLearningImageProvider({
+      env: { VIBELEARNING_IMAGE_API_KEY: MOCK_API_KEY },
+      fetchImpl: mock.fetchImpl,
+    });
+
+    await provider.createTextToImageTask({ ...input(), model: "future-provider-model" });
+
+    expect(String(mock.calls[0].input)).toBe(
+      "https://image1.vibelearning.top/v1/images/generations/tasks",
+    );
+    expect(JSON.parse(String(mock.calls[0].init?.body)).model).toBe("future-provider-model");
+  });
+
+  test.each([
+    ["1:1", "1K", "1024x1024"],
+    ["1:1", "2K", "2048x2048"],
+    ["1:1", "4K", "4096x4096"],
+    ["4:3", "1K", "1024x768"],
+    ["4:3", "2K", "2048x1536"],
+    ["4:3", "4K", "4096x3072"],
+    ["3:4", "1K", "768x1024"],
+    ["3:4", "2K", "1536x2048"],
+    ["3:4", "4K", "3072x4096"],
+    ["16:9", "1K", "1024x576"],
+    ["16:9", "2K", "2048x1152"],
+    ["16:9", "4K", "4096x2304"],
+    ["9:16", "1K", "576x1024"],
+    ["9:16", "2K", "1152x2048"],
+    ["9:16", "4K", "2304x4096"],
+  ])("maps %s + %s to %s in a text-to-image request", async (aspectRatio, quality, size) => {
+    const mock = mockFetch(jsonResponse({ task_id: "mapped-task" }));
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    await provider.createTextToImageTask({ ...input(), aspectRatio, quality });
+
+    expect(JSON.parse(String(mock.calls[0].init?.body)).size).toBe(size);
+    expect(resolveProviderSize(aspectRatio, quality)).toBe(size);
+  });
+
+  test("uses image for one image-to-image reference and its mapped size", async () => {
     const mock = mockFetch(jsonResponse({ data: { task_id: "single-task" } }));
     const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
 
-    const created = await provider.createTask(input([reference("one.png", 1)]));
+    const created = await provider.createTask({
+      ...input([reference("one.png", 1)]),
+      aspectRatio: "4:3",
+      quality: "2K",
+    });
 
     expect(created.mode).toBe("image-to-image");
     expect(String(mock.calls[0].input)).toBe(
@@ -93,15 +136,23 @@ describe("VibeLearningImageProvider", () => {
     expect(body.getAll("image")).toHaveLength(1);
     expect(body.getAll("image[]")).toHaveLength(0);
     expect((body.get("image") as File).name).toBe("one.png");
+    expect(body.get("model")).toBe("gpt-image-2");
+    expect(body.get("prompt")).toBe("a quiet reading room");
+    expect(body.get("size")).toBe("2048x1536");
+    expect(body.get("n")).toBe("1");
     expect(new Headers(mock.calls[0].init?.headers).has("content-type")).toBe(false);
   });
 
-  test("uses repeated image[] fields for multiple references", async () => {
+  test("uses repeated image[] fields for multiple references and its mapped size", async () => {
     const mock = mockFetch(jsonResponse({ task_id: "multi-task" }));
     const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
 
     await provider.createImageToImageTask(
-      input([reference("one.png", 1), reference("two.png", 2)]),
+      {
+        ...input([reference("one.png", 1), reference("two.png", 2)]),
+        aspectRatio: "9:16",
+        quality: "4K",
+      },
     );
 
     const body = mock.calls[0].init?.body as FormData;
@@ -111,11 +162,15 @@ describe("VibeLearningImageProvider", () => {
       "one.png",
       "two.png",
     ]);
+    expect(body.get("size")).toBe("2304x4096");
   });
 
   test("reads completed URL images from response.data", async () => {
     const mock = mockFetch(
-      jsonResponse({ status: "completed", data: [{ url: "https://cdn.example/result.webp" }] }),
+      jsonResponse({
+        status: "completed",
+        response: { data: [{ url: "https://cdn.example/result.webp" }] },
+      }),
     );
     const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
 
@@ -131,8 +186,229 @@ describe("VibeLearningImageProvider", () => {
     });
   });
 
+  test("keeps a completed task processing while response.data is temporarily empty", async () => {
+    const mock = mockFetch(jsonResponse({ status: "completed", response: { data: [] } }));
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    await expect(provider.pollTextToImageTask("delayed-task")).resolves.toEqual({
+      taskId: "delayed-task",
+      status: "processing",
+      images: [],
+    });
+  });
+
+  test("keeps a succeeded task processing while no result field is present", async () => {
+    const mock = mockFetch(jsonResponse({ status: "succeeded" }));
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    await expect(provider.pollTextToImageTask("missing-result-task")).resolves.toMatchObject({
+      taskId: "missing-result-task",
+      status: "processing",
+      images: [],
+    });
+  });
+
+  test("uses the same task ID until a delayed URL result becomes available", async () => {
+    const mock = mockFetch(
+      jsonResponse({ status: "completed", data: [] }),
+      jsonResponse({ status: "done", response: { data: [{ url: "https://cdn.example/delayed.webp" }] } }),
+    );
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    expect((await provider.pollTextToImageTask("delayed-url")).status).toBe("processing");
+    expect(await provider.pollTextToImageTask("delayed-url")).toMatchObject({
+      status: "completed",
+      images: [{ kind: "url", url: "https://cdn.example/delayed.webp" }],
+    });
+    expect(mock.calls).toHaveLength(2);
+    expect(mock.calls.map((call) => String(call.input))).toEqual([
+      "https://mock.vibelearning.test/v1/images/generations/tasks/delayed-url",
+      "https://mock.vibelearning.test/v1/images/generations/tasks/delayed-url",
+    ]);
+  });
+
+  test("uses a delayed base64 result once it becomes available", async () => {
+    const mock = mockFetch(
+      jsonResponse({ status: "success", result: { data: [] } }),
+      jsonResponse({ status: "success", response: { data: [{ b64_json: "AQIDBA==" }] } }),
+    );
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    expect((await provider.pollImageToImageTask("delayed-base64")).status).toBe("processing");
+    await expect(provider.pollImageToImageTask("delayed-base64")).resolves.toMatchObject({
+      status: "completed",
+      images: [{ kind: "base64", bytes: new Uint8Array([1, 2, 3, 4]) }],
+    });
+  });
+
+  test("returns a structural diagnostic from one GET without exposing result values", async () => {
+    const imageUrl = "https://cdn.example/diagnostic.webp";
+    const imageBase64 = "AQIDBA==";
+    const mock = mockFetch(
+      jsonResponse({
+        status: "completed",
+        state: "done",
+        code: "OK",
+        data: {
+          status: "completed",
+          state: "ready",
+          data: [{ url: imageUrl, b64_json: imageBase64 }],
+        },
+        result: { status: "completed", data: [{ url: imageUrl }] },
+      }),
+    );
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    const diagnostic = await provider.diagnoseProviderTask({
+      generationTaskId: "5c67c57e-098f-49a0-9a5f-c7f82677ecc5",
+      taskId: "task_diagnostic",
+      mode: "text-to-image",
+    });
+    const serialized = JSON.stringify(diagnostic);
+
+    expect(mock.calls).toHaveLength(1);
+    expect(mock.calls[0].init?.method).toBe("GET");
+    expect(String(mock.calls[0].input)).toBe(
+      "https://mock.vibelearning.test/v1/images/generations/tasks/task_diagnostic",
+    );
+    expect(diagnostic).toMatchObject({
+      generationTaskId: "5c67c57e-098f-49a0-9a5f-c7f82677ecc5",
+      provider: "vibelearning",
+      providerTaskIdPresent: true,
+      generationMode: "text-to-image",
+      httpStatus: 200,
+      responseIsJson: true,
+      topLevelKeys: ["code", "data", "result", "state", "status"],
+      dataType: "object",
+      dataKeys: ["data", "state", "status"],
+      nestedDataType: "array",
+      nestedDataCount: 1,
+      resultType: "object",
+      resultKeys: ["data", "status"],
+      resultDataType: "array",
+      resultDataCount: 1,
+      knownResultFlags: {
+        topUrl: false,
+        topB64Json: false,
+        dataUrl: false,
+        dataB64Json: false,
+        dataDataUrl: true,
+        dataDataB64Json: true,
+        resultUrl: false,
+        resultB64Json: false,
+        resultDataUrl: true,
+        resultDataB64Json: false,
+        responseUrl: false,
+        responseB64Json: false,
+        responseImageUrl: false,
+        responseOutputUrl: false,
+        responseItemUrl: false,
+        responseItemB64Json: false,
+        responseItemImageUrl: false,
+        responseItemOutputUrl: false,
+        responseDataUrl: false,
+        responseDataB64Json: false,
+        responseDataImageUrl: false,
+        responseDataOutputUrl: false,
+        responseOutputB64Json: false,
+        responseOutputImageUrl: false,
+      },
+    });
+    expect(serialized).not.toContain(imageUrl);
+    expect(serialized).not.toContain(imageBase64);
+    expect(serialized).not.toContain(MOCK_API_KEY);
+    expect(serialized).not.toContain("Authorization");
+  });
+
+  test("summarizes an array response without returning its URL or task metadata values", async () => {
+    const imageUrl = "https://example.test/image.png";
+    const taskId = "task-should-not-leak";
+    const queryEndpoint = "/v1/images/generations/tasks/task-should-not-leak";
+    const mock = mockFetch(jsonResponse({
+      status: "completed",
+      task_id: taskId,
+      query_endpoint: queryEndpoint,
+      response: [{ url: imageUrl }],
+    }));
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    const diagnostic = await provider.diagnoseProviderTask({
+      generationTaskId: "5c67c57e-098f-49a0-9a5f-c7f82677ecc5",
+      taskId: "task_diagnostic",
+      mode: "text-to-image",
+    });
+    const serialized = JSON.stringify(diagnostic);
+
+    expect(diagnostic).toMatchObject({
+      responseType: "array",
+      responseCount: 1,
+      responseItemType: "object",
+      responseItemKeys: ["url"],
+      knownResultFlags: { responseItemUrl: true },
+    });
+    expect(serialized).not.toContain(imageUrl);
+    expect(serialized).not.toContain(taskId);
+    expect(serialized).not.toContain(queryEndpoint);
+  });
+
+  test("summarizes response.data and response.output result shapes without returning encoded values", async () => {
+    const base64 = "AQIDBA==";
+    const outputUrl = "https://example.test/output.png";
+    const mock = mockFetch(
+      jsonResponse({
+        status: "completed",
+        response: {
+          data: [{ b64_json: base64 }],
+          output: [{ url: outputUrl }],
+          constructor: "excluded",
+          prototype: "excluded",
+        },
+      }),
+    );
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    const diagnostic = await provider.diagnoseProviderTask({
+      generationTaskId: "5c67c57e-098f-49a0-9a5f-c7f82677ecc5",
+      taskId: "task_diagnostic",
+      mode: "text-to-image",
+    });
+    const serialized = JSON.stringify(diagnostic);
+
+    expect(diagnostic).toMatchObject({
+      responseType: "object",
+      responseKeys: ["data", "output"],
+      responseDataType: "array",
+      responseDataCount: 1,
+      responseOutputType: "array",
+      responseOutputCount: 1,
+      knownResultFlags: {
+        responseDataB64Json: true,
+        responseOutputUrl: true,
+      },
+    });
+    expect(serialized).not.toContain(base64);
+    expect(serialized).not.toContain(outputUrl);
+  });
+
+  test("reports a string response only by type", async () => {
+    const rawResponse = "https://example.test/never-return-this";
+    const mock = mockFetch(jsonResponse({ status: "completed", response: rawResponse }));
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    const diagnostic = await provider.diagnoseProviderTask({
+      generationTaskId: "5c67c57e-098f-49a0-9a5f-c7f82677ecc5",
+      taskId: "task_diagnostic",
+      mode: "text-to-image",
+    });
+
+    expect(diagnostic).toMatchObject({ responseType: "string", responseKeys: [], responseCount: null });
+    expect(JSON.stringify(diagnostic)).not.toContain(rawResponse);
+  });
+
   test("normalizes b64_json images as bytes", async () => {
-    const mock = mockFetch(jsonResponse({ status: "success", data: [{ b64_json: "AQIDBA==" }] }));
+    const mock = mockFetch(
+      jsonResponse({ status: "success", response: { data: [{ b64_json: "AQIDBA==" }] } }),
+    );
     const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
 
     const result = await provider.pollTask({
@@ -156,7 +432,7 @@ describe("VibeLearningImageProvider", () => {
     const mock = mockFetch(
       jsonResponse({
         status: "failed",
-        error: { code: "MODEL_ERROR", message: `upstream rejected ${MOCK_API_KEY}` },
+        response: { error: { code: "MODEL_ERROR", message: `upstream rejected ${MOCK_API_KEY}` } },
       }),
     );
     const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
@@ -171,6 +447,21 @@ describe("VibeLearningImageProvider", () => {
     });
     expect(result.error?.message).toContain("[REDACTED]");
     expect(result.error?.message).not.toContain(MOCK_API_KEY);
+  });
+
+  test("keeps explicit rejected statuses terminal and unknown statuses out of the success path", async () => {
+    const mock = mockFetch(
+      jsonResponse({ status: "rejected", error: { message: "policy rejected" } }),
+      jsonResponse({ status: "result_eventually" }),
+    );
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    await expect(provider.pollTextToImageTask("rejected-task")).resolves.toMatchObject({
+      status: "failed",
+    });
+    await expect(provider.pollTextToImageTask("unknown-task")).rejects.toMatchObject({
+      code: "INVALID_PROVIDER_RESPONSE",
+    });
   });
 
   test("normalizes non-2xx provider errors", async () => {
@@ -198,13 +489,13 @@ describe("VibeLearningImageProvider", () => {
     const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl });
 
     await expect(
-      provider.createTask({ ...input(), aspectRatio: "16:9", quality: "2K" }),
+      provider.createTask({ ...input(), aspectRatio: "21:9", quality: "2K" }),
     ).rejects.toMatchObject({ code: "UNSUPPORTED_PROVIDER_SIZE" });
     expect(fetchCalled).toBe(false);
     expect(() => resolveProviderSize("1:1", "1K")).not.toThrow();
   });
 
-  test("rejects invalid base64 and empty completed results", async () => {
+  test("rejects invalid base64 while empty completed results remain retryable", async () => {
     const mock = mockFetch(
       jsonResponse({ status: "completed", data: [{ b64_json: "not-base64!" }] }),
       jsonResponse({ status: "completed", data: [] }),
@@ -214,8 +505,20 @@ describe("VibeLearningImageProvider", () => {
     await expect(provider.pollTextToImageTask("bad-base64")).rejects.toMatchObject({
       code: "INVALID_PROVIDER_BASE64",
     });
-    await expect(provider.pollTextToImageTask("empty-data")).rejects.toMatchObject({
-      code: "EMPTY_PROVIDER_RESULT",
+    await expect(provider.pollTextToImageTask("empty-data")).resolves.toMatchObject({
+      status: "processing",
+      images: [],
+    });
+  });
+
+  test("rejects non-HTTPS provider result URLs", async () => {
+    const mock = mockFetch(
+      jsonResponse({ status: "completed", response: { data: [{ url: "http://cdn.example/result.webp" }] } }),
+    );
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    await expect(provider.pollTextToImageTask("http-result")).rejects.toMatchObject({
+      code: "INVALID_PROVIDER_IMAGE",
     });
   });
 
