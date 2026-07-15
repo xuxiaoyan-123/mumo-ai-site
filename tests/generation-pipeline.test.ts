@@ -979,8 +979,20 @@ describe("generation pipeline", () => {
     const created = await createGenerationTaskForUser(USER_ID, input(), dependencies);
 
     expect((await pollGenerationTaskForUser(USER_ID, created.taskId, dependencies)).status).toBe("running");
+    expect(provider.createCalls).toHaveLength(1);
+    expect(taskRow(db)).toMatchObject({ status: "running", refund_ledger_id: null });
+    expect(count(db, "credit_ledger")).toBe(1);
+    expect(balance(db)).toBe(13);
+    expect(bucket.objects.size).toBe(0);
+
     expect((await pollGenerationTaskForUser(USER_ID, created.taskId, dependencies)).status).toBe("succeeded");
     expect(taskRow(db)).toMatchObject({ status: "succeeded", refund_ledger_id: null });
+    expect(count(db, "generation_history")).toBe(1);
+    expect(bucket.objects.size).toBe(1);
+    expect(count(db, "credit_ledger")).toBe(1);
+    expect(balance(db)).toBe(13);
+    await pollGenerationTaskForUser(USER_ID, created.taskId, dependencies);
+    expect(provider.createCalls).toHaveLength(1);
     expect(count(db, "generation_history")).toBe(1);
     expect(bucket.objects.size).toBe(1);
   });

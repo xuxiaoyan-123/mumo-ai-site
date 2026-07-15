@@ -349,10 +349,22 @@ function getCompletedImageData(payload: {
   data?: unknown;
   response?: unknown;
   result?: unknown;
+  url?: unknown;
+  b64_json?: unknown;
 }): unknown {
   const response = asRecord(payload.response);
   const result = asRecord(payload.result);
-  return response?.data ?? payload.data ?? result?.data;
+  return response?.data ?? payload.data ?? result?.data ?? (
+    typeof payload.url === "string" || typeof payload.b64_json === "string" ? payload : undefined
+  );
+}
+
+function hasRecognizedImageCandidate(data: unknown): boolean {
+  const items = Array.isArray(data) ? data : data == null ? [] : [data];
+  return items.some((item) => {
+    const record = asRecord(item);
+    return !!record && (typeof record.url === "string" || typeof record.b64_json === "string");
+  });
 }
 
 function requireHttpsImages(images: ReturnType<typeof normalizeImageResults>) {
@@ -642,10 +654,14 @@ export class VibeLearningImageProvider implements ImageProvider {
 
     const status = normalizeVibeLearningTaskStatus(parsed.data.status);
     if (status === "completed") {
+      const completedData = getCompletedImageData(parsed.data);
+      if (!hasRecognizedImageCandidate(completedData)) {
+        return { taskId: normalizedTaskId, status: "processing", images: [] };
+      }
       let images;
       try {
         images = requireHttpsImages(
-          normalizeImageResults(getCompletedImageData(parsed.data), "image/webp"),
+          normalizeImageResults(completedData, "image/webp"),
         );
       } catch (error) {
         if (error instanceof ImageProviderError && error.code === "EMPTY_PROVIDER_RESULT") {

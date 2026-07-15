@@ -208,6 +208,58 @@ describe("VibeLearningImageProvider", () => {
     });
   });
 
+  test("keeps completed response.data null or unknown items processing", async () => {
+    const mock = mockFetch(
+      jsonResponse({ status: "completed", response: { data: null } }),
+      jsonResponse({ status: "completed", response: { data: [{ unknown_result: "ignored" }] } }),
+    );
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    await expect(provider.pollTextToImageTask("null-result")).resolves.toMatchObject({
+      status: "processing",
+      images: [],
+    });
+    await expect(provider.pollTextToImageTask("unknown-result")).resolves.toMatchObject({
+      status: "processing",
+      images: [],
+    });
+  });
+
+  test("reads completed base64 images from response.data", async () => {
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const imageBase64 = btoa(String.fromCharCode(...bytes));
+    const mock = mockFetch(jsonResponse({
+      status: "completed",
+      response: { created: 123, data: [{ b64_json: imageBase64 }], usage: {} },
+    }));
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    const result = await provider.pollTextToImageTask("existing-task");
+
+    expect(result).toMatchObject({
+      status: "completed",
+      images: [{ kind: "base64", bytes, mimeType: "image/webp" }],
+    });
+    expect(mock.calls).toHaveLength(1);
+    expect(mock.calls[0].init?.method).toBe("GET");
+  });
+
+  test.each([
+    ["data", (imageBase64: string) => ({ data: [{ b64_json: imageBase64 }] })],
+    ["result.data", (imageBase64: string) => ({ result: { data: [{ b64_json: imageBase64 }] } })],
+    ["top-level url", () => ({ url: "https://cdn.example/top-level.webp" })],
+    ["top-level b64_json", (imageBase64: string) => ({ b64_json: imageBase64 })],
+  ])("keeps the explicit %s result path compatible", async (_path, buildPayload) => {
+    const imageBase64 = btoa(String.fromCharCode(0x89, 0x50, 0x4e, 0x47));
+    const mock = mockFetch(jsonResponse({ status: "completed", ...buildPayload(imageBase64) }));
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    const result = await provider.pollTextToImageTask("compatible-result");
+
+    expect(result.status).toBe("completed");
+    expect(result.images).toHaveLength(1);
+  });
+
   test("uses the same task ID until a delayed URL result becomes available", async () => {
     const mock = mockFetch(
       jsonResponse({ status: "completed", data: [] }),
@@ -452,7 +504,7 @@ describe("VibeLearningImageProvider", () => {
   test("keeps explicit rejected statuses terminal and unknown statuses out of the success path", async () => {
     const mock = mockFetch(
       jsonResponse({ status: "rejected", error: { message: "policy rejected" } }),
-      jsonResponse({ status: "result_eventually" }),
+      jsonResponse({ status: "result_eventually", response: { data: [{ url: "https://cdn.example/ignored.webp" }] } }),
     );
     const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
 
@@ -463,6 +515,22 @@ describe("VibeLearningImageProvider", () => {
       code: "INVALID_PROVIDER_RESPONSE",
     });
   });
+
+  test.each(["failed", "error", "cancelled", "canceled", "rejected", "expired"])(
+    "keeps explicit %s statuses failed even when response.data contains an image",
+    async (status) => {
+      const mock = mockFetch(jsonResponse({
+        status,
+        response: { data: [{ url: "https://cdn.example/ignored.webp" }] },
+      }));
+      const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+      await expect(provider.pollTextToImageTask("failed-task")).resolves.toMatchObject({
+        status: "failed",
+        images: [],
+      });
+    },
+  );
 
   test("normalizes non-2xx provider errors", async () => {
     const mock = mockFetch(
