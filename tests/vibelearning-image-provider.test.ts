@@ -54,6 +54,11 @@ function jsonResponse(payload: unknown, status = 200): Response {
   return Response.json(payload, { status });
 }
 
+function pngBase64(): { bytes: Uint8Array; encoded: string } {
+  const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  return { bytes, encoded: btoa(String.fromCharCode(...bytes)) };
+}
+
 async function diagnoseResponseDataItem(value: unknown) {
   const mock = mockFetch(jsonResponse({ status: "completed", response: { data: value } }));
   const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
@@ -237,8 +242,7 @@ describe("VibeLearningImageProvider", () => {
   });
 
   test("reads completed base64 images from response.data", async () => {
-    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-    const imageBase64 = btoa(String.fromCharCode(...bytes));
+    const { bytes, encoded: imageBase64 } = pngBase64();
     const mock = mockFetch(jsonResponse({
       status: "completed",
       response: { created: 123, data: [{ b64_json: imageBase64 }], usage: {} },
@@ -253,6 +257,98 @@ describe("VibeLearningImageProvider", () => {
     });
     expect(mock.calls).toHaveLength(1);
     expect(mock.calls[0].init?.method).toBe("GET");
+  });
+
+  test.each([
+    ["empty URL", ""],
+    ["HTTP URL", "http://example.invalid/image.png"],
+    ["relative URL", "/temporary/image.png"],
+  ])("prefers valid b64_json over a sibling %s", async (_kind, url) => {
+    const { bytes, encoded } = pngBase64();
+    const mock = mockFetch(jsonResponse({
+      status: "completed",
+      response: { data: [{ b64_json: encoded, url }] },
+    }));
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    const result = await provider.pollTextToImageTask("existing-task");
+
+    expect(result).toMatchObject({
+      status: "completed",
+      images: [{ kind: "base64", bytes }],
+    });
+    expect(result.images).toHaveLength(1);
+    expect(mock.calls).toHaveLength(1);
+  });
+
+  test.each([
+    (encoded: string) => ({ url: "https://example.invalid/image.png", b64_json: encoded }),
+    (encoded: string) => ({ b64_json: encoded, url: "https://example.invalid/image.png" }),
+  ])("prefers b64_json over HTTPS URL regardless of field order", async (itemBuilder) => {
+    const { bytes, encoded } = pngBase64();
+    const mock = mockFetch(jsonResponse({ status: "completed", response: { data: [itemBuilder(encoded)] } }));
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    const result = await provider.pollTextToImageTask("existing-task");
+
+    expect(result).toMatchObject({ images: [{ kind: "base64", bytes }] });
+    expect(result.images).toHaveLength(1);
+    expect(mock.calls).toHaveLength(1);
+  });
+
+  test("does not fall back to a sibling HTTPS URL when nonempty b64_json is invalid", async () => {
+    const mock = mockFetch(jsonResponse({
+      status: "completed",
+      response: { data: [{ b64_json: "not-base64!", url: "https://example.invalid/image.png" }] },
+    }));
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    await expect(provider.pollTextToImageTask("existing-task")).rejects.toMatchObject({
+      code: "INVALID_PROVIDER_BASE64",
+    });
+    expect(mock.calls).toHaveLength(1);
+  });
+
+  test.each([
+    ["empty", ""],
+    ["null", null],
+    ["missing", undefined],
+  ])("uses HTTPS URL when b64_json is %s", async (_kind, b64_json) => {
+    const item = b64_json === undefined
+      ? { url: "https://cdn.example/fallback.webp" }
+      : { b64_json, url: "https://cdn.example/fallback.webp" };
+    const mock = mockFetch(jsonResponse({ status: "completed", response: { data: [item] } }));
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    const result = await provider.pollTextToImageTask("existing-task");
+
+    expect(result).toMatchObject({ status: "completed", images: [{ kind: "url" }] });
+    expect(result.images).toHaveLength(1);
+  });
+
+  test("rejects a non-HTTPS URL when no usable b64_json exists", async () => {
+    const mock = mockFetch(jsonResponse({
+      status: "completed",
+      response: { data: [{ b64_json: "", url: "http://example.invalid/image.png" }] },
+    }));
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    await expect(provider.pollTextToImageTask("existing-task")).rejects.toMatchObject({
+      code: "INVALID_PROVIDER_IMAGE",
+    });
+  });
+
+  test("keeps completed result items with no usable candidates processing", async () => {
+    const mock = mockFetch(jsonResponse({
+      status: "completed",
+      response: { data: [{ b64_json: "", url: "" }] },
+    }));
+    const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+
+    await expect(provider.pollTextToImageTask("existing-task")).resolves.toMatchObject({
+      status: "processing",
+      images: [],
+    });
   });
 
   test.each([
