@@ -54,6 +54,17 @@ function jsonResponse(payload: unknown, status = 200): Response {
   return Response.json(payload, { status });
 }
 
+async function diagnoseResponseDataItem(value: unknown) {
+  const mock = mockFetch(jsonResponse({ status: "completed", response: { data: value } }));
+  const provider = new VibeLearningImageProvider({ env: MOCK_ENV, fetchImpl: mock.fetchImpl });
+  const diagnostic = await provider.diagnoseProviderTask({
+    generationTaskId: "diagnostic-generation-task",
+    taskId: "diagnostic-provider-task",
+    mode: "text-to-image",
+  });
+  return { diagnostic, serialized: JSON.stringify(diagnostic), calls: mock.calls };
+}
+
 describe("VibeLearningImageProvider", () => {
   test("creates text-to-image tasks with JSON and automatic routing", async () => {
     const mock = mockFetch(jsonResponse({ task_id: "text-task", status: "queued" }));
@@ -514,6 +525,85 @@ describe("VibeLearningImageProvider", () => {
     await expect(provider.pollTextToImageTask("unknown-task")).rejects.toMatchObject({
       code: "INVALID_PROVIDER_RESPONSE",
     });
+  });
+
+  test.each([
+    ["png", new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+    ["jpeg", new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10])],
+    ["webp", new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50])],
+  ] as const)("diagnoses valid %s Base64 magic without returning image data", async (imageType, bytes) => {
+    const encoded = btoa(String.fromCharCode(...bytes));
+    const { diagnostic, serialized } = await diagnoseResponseDataItem([{ b64_json: encoded }]);
+
+    expect(diagnostic).toMatchObject({
+      responseDataItemType: "object",
+      responseDataItemKeys: ["b64_json"],
+      responseDataItemB64Type: "string",
+      responseDataItemB64AlphabetValid: true,
+      responseDataItemB64PaddingValid: true,
+      responseDataItemB64DecodedPrefixValid: true,
+      responseDataItemDetectedImageType: imageType,
+      responseDataItemMagicValid: true,
+    });
+    expect(serialized).not.toContain(encoded);
+  });
+
+  test("diagnoses data URLs, whitespace, and non-multiple-of-four lengths without returning payload text", async () => {
+    const encoded = btoa(String.fromCharCode(0x89, 0x50, 0x4e, 0x47));
+    const dataUrl = `data:image/png;base64,${encoded}`;
+    const whitespace = `${encoded.slice(0, 2)}\n${encoded.slice(2)}`;
+    const { diagnostic: dataUrlDiagnostic, serialized: dataUrlSerialized } = await diagnoseResponseDataItem([{ b64_json: dataUrl }]);
+    const { diagnostic: whitespaceDiagnostic, serialized: whitespaceSerialized } = await diagnoseResponseDataItem([{ b64_json: whitespace }]);
+    const { diagnostic: shortDiagnostic } = await diagnoseResponseDataItem([{ b64_json: "AQI" }]);
+
+    expect(dataUrlDiagnostic.responseDataItemB64HasDataUrlPrefix).toBe(true);
+    expect(whitespaceDiagnostic.responseDataItemB64HasWhitespace).toBe(true);
+    expect(shortDiagnostic.responseDataItemB64LengthMod4).toBe(3);
+    expect(dataUrlSerialized).not.toContain(dataUrl);
+    expect(whitespaceSerialized).not.toContain(whitespace);
+  });
+
+  test("diagnoses invalid alphabet, padding, magic, and likely truncation safely", async () => {
+    const { diagnostic: invalidAlphabet } = await diagnoseResponseDataItem([{ b64_json: "not-base64!" }]);
+    const { diagnostic: invalidPadding } = await diagnoseResponseDataItem([{ b64_json: "AQ=I" }]);
+    const unknownMagic = btoa(String.fromCharCode(1, 2, 3, 4));
+    const { diagnostic: unknownMagicDiagnostic } = await diagnoseResponseDataItem([{ b64_json: unknownMagic }]);
+    const { diagnostic: truncated } = await diagnoseResponseDataItem([{ b64_json: "AQIDB" }]);
+
+    expect(invalidAlphabet.responseDataItemB64AlphabetValid).toBe(false);
+    expect(invalidPadding.responseDataItemB64PaddingValid).toBe(false);
+    expect(unknownMagicDiagnostic).toMatchObject({
+      responseDataItemB64DecodedPrefixValid: true,
+      responseDataItemDetectedImageType: "unknown",
+      responseDataItemMagicValid: false,
+    });
+    expect(truncated.responseDataItemLikelyTruncated).toBe(true);
+  });
+
+  test("summarizes empty and non-object response.data items without scanning further items", async () => {
+    const { diagnostic: empty } = await diagnoseResponseDataItem([]);
+    const { diagnostic: nonObject } = await diagnoseResponseDataItem(["not-an-image", { b64_json: "ignored" }]);
+
+    expect(empty).toMatchObject({
+      responseDataItemType: "null",
+      responseDataItemKeys: [],
+      responseDataItemB64Length: null,
+      responseDataItemMagicValid: false,
+    });
+    expect(nonObject).toMatchObject({
+      responseDataItemType: "string",
+      responseDataItemKeys: [],
+      responseDataItemB64Type: "null",
+    });
+  });
+
+  test("returns the existing normalization error code without error details", async () => {
+    const { diagnostic, serialized } = await diagnoseResponseDataItem([{ b64_json: "not-base64!" }]);
+
+    expect(diagnostic.normalizationErrorCode).toBe("INVALID_PROVIDER_BASE64");
+    expect(serialized).not.toContain("message");
+    expect(serialized).not.toContain("stack");
+    expect(serialized).not.toContain("cause");
   });
 
   test.each(["failed", "error", "cancelled", "canceled", "rejected", "expired"])(

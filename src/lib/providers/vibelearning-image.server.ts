@@ -110,6 +110,26 @@ type ProviderTaskValueSummary = {
   state: string | null;
 };
 
+type DiagnosticImageType = "png" | "jpeg" | "webp" | "unknown" | null;
+
+type ResponseDataItemDiagnostic = {
+  type: ProviderTaskValueSummary["type"];
+  keys: string[];
+  urlType: ProviderTaskValueSummary["type"];
+  urlIsHttps: boolean;
+  b64Type: ProviderTaskValueSummary["type"];
+  b64Length: number | null;
+  b64HasDataUrlPrefix: boolean;
+  b64HasWhitespace: boolean;
+  b64LengthMod4: 0 | 1 | 2 | 3 | null;
+  b64AlphabetValid: boolean;
+  b64PaddingValid: boolean;
+  b64DecodedPrefixValid: boolean;
+  detectedImageType: DiagnosticImageType;
+  magicValid: boolean;
+  likelyTruncated: boolean;
+};
+
 export type ProviderTaskDiagnostic = {
   generationTaskId: string;
   provider: string;
@@ -146,6 +166,21 @@ export type ProviderTaskDiagnostic = {
   responseDataType: ProviderTaskValueSummary["type"];
   responseDataKeys: string[];
   responseDataCount: number | null;
+  responseDataItemType: ResponseDataItemDiagnostic["type"];
+  responseDataItemKeys: string[];
+  responseDataItemUrlType: ResponseDataItemDiagnostic["urlType"];
+  responseDataItemUrlIsHttps: boolean;
+  responseDataItemB64Type: ResponseDataItemDiagnostic["b64Type"];
+  responseDataItemB64Length: number | null;
+  responseDataItemB64HasDataUrlPrefix: boolean;
+  responseDataItemB64HasWhitespace: boolean;
+  responseDataItemB64LengthMod4: ResponseDataItemDiagnostic["b64LengthMod4"];
+  responseDataItemB64AlphabetValid: boolean;
+  responseDataItemB64PaddingValid: boolean;
+  responseDataItemB64DecodedPrefixValid: boolean;
+  responseDataItemDetectedImageType: DiagnosticImageType;
+  responseDataItemMagicValid: boolean;
+  responseDataItemLikelyTruncated: boolean;
   responseOutputType: ProviderTaskValueSummary["type"];
   responseOutputKeys: string[];
   responseOutputCount: number | null;
@@ -357,6 +392,88 @@ function getCompletedImageData(payload: {
   return response?.data ?? payload.data ?? result?.data ?? (
     typeof payload.url === "string" || typeof payload.b64_json === "string" ? payload : undefined
   );
+}
+
+const MAX_DIAGNOSTIC_BASE64_CHARS = 4096;
+
+function diagnosticValueType(value: unknown): ProviderTaskValueSummary["type"] {
+  if (value === null || value === undefined) return "null";
+  if (Array.isArray(value)) return "array";
+  if (asRecord(value)) return "object";
+  return typeof value === "string" ? "string" : "other";
+}
+
+function decodeBase64DiagnosticPrefix(value: string): Uint8Array | null {
+  let candidate = value.slice(0, 64).replace(/\s/g, "");
+  if (candidate.length % 4 === 1) candidate = candidate.slice(0, -1);
+  if (candidate.length < 2) return null;
+  try {
+    const binary = atob(candidate.padEnd(candidate.length + ((4 - (candidate.length % 4)) % 4), "="));
+    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  } catch {
+    return null;
+  }
+}
+
+function detectDiagnosticImageType(bytes: Uint8Array | null): DiagnosticImageType {
+  if (!bytes) return null;
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "png";
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpeg";
+  if (bytes.length >= 12 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return "webp";
+  return "unknown";
+}
+
+function summarizeResponseDataItem(value: unknown): ResponseDataItemDiagnostic {
+  const item = asRecord(value);
+  const url = item?.url;
+  const b64 = item?.b64_json;
+  const urlType = diagnosticValueType(url);
+  const b64Type = diagnosticValueType(b64);
+  const empty: ResponseDataItemDiagnostic = {
+    type: diagnosticValueType(value), keys: item ? safeDiagnosticKeys(item) : [],
+    urlType, urlIsHttps: typeof url === "string" && url.startsWith("https://"),
+    b64Type, b64Length: null, b64HasDataUrlPrefix: false, b64HasWhitespace: false,
+    b64LengthMod4: null, b64AlphabetValid: false, b64PaddingValid: false,
+    b64DecodedPrefixValid: false, detectedImageType: null, magicValid: false, likelyTruncated: false,
+  };
+  if (typeof b64 !== "string") return empty;
+
+  const prefix = b64.slice(0, 128);
+  const dataUrlMatch = prefix.match(/^data:image\/[a-z0-9.+-]+;base64,/i);
+  const payloadStart = dataUrlMatch?.[0].length ?? 0;
+  const bounded = b64.slice(payloadStart, payloadStart + MAX_DIAGNOSTIC_BASE64_CHARS);
+  const compact = bounded.replace(/\s/g, "");
+  const paddingIndex = compact.indexOf("=");
+  const unpadded = compact.replace(/=/g, "");
+  const alphabetValid = /^[A-Za-z0-9+/]*$/.test(unpadded);
+  const paddingValid = alphabetValid && (
+    paddingIndex < 0 || (/^=+$/.test(compact.slice(paddingIndex)) && compact.length - paddingIndex <= 2)
+  ) && compact.length % 4 !== 1;
+  const decoded = alphabetValid && paddingValid ? decodeBase64DiagnosticPrefix(compact) : null;
+  const detectedImageType = detectDiagnosticImageType(decoded);
+  const exceedsDiagnosticBound = b64.length - payloadStart > MAX_DIAGNOSTIC_BASE64_CHARS;
+
+  return {
+    ...empty,
+    b64Length: Math.min(b64.length - payloadStart, MAX_DIAGNOSTIC_BASE64_CHARS),
+    b64HasDataUrlPrefix: !!dataUrlMatch,
+    b64HasWhitespace: /\s/.test(bounded),
+    b64LengthMod4: (compact.length % 4) as 0 | 1 | 2 | 3,
+    b64AlphabetValid: alphabetValid,
+    b64PaddingValid: paddingValid,
+    b64DecodedPrefixValid: decoded !== null,
+    detectedImageType,
+    magicValid: detectedImageType === "png" || detectedImageType === "jpeg" || detectedImageType === "webp",
+    likelyTruncated: !exceedsDiagnosticBound && compact.length % 4 === 1,
+  };
+}
+
+function safeDiagnosticErrorCode(error: unknown): string {
+  if (error instanceof ImageProviderError) return error.code;
+  const code = error && typeof error === "object" ? (error as { code?: unknown }).code : undefined;
+  return typeof code === "string" && /^[A-Z0-9_]{1,64}$/.test(code)
+    ? code
+    : "PROVIDER_DIAGNOSTIC_ERROR";
 }
 
 function hasRecognizedImageCandidate(data: unknown): boolean {
@@ -707,6 +824,7 @@ export class VibeLearningImageProvider implements ImageProvider {
     const responseRecord = asRecord(providerResponse);
     const responseItem = firstArrayItem(providerResponse);
     const responseData = responseRecord?.data;
+    const responseDataItem = firstArrayItem(responseData);
     const responseOutput = responseRecord?.output;
     const dataSummary = summarizeProviderTaskValue(data);
     const nestedDataSummary = summarizeProviderTaskValue(nestedData);
@@ -715,6 +833,7 @@ export class VibeLearningImageProvider implements ImageProvider {
     const responseSummary = summarizeProviderTaskValue(providerResponse);
     const responseItemSummary = summarizeProviderTaskValue(responseItem);
     const responseDataSummary = summarizeProviderTaskValue(responseData);
+    const responseDataItemSummary = summarizeResponseDataItem(responseDataItem);
     const responseOutputSummary = summarizeProviderTaskValue(responseOutput);
 
     let normalizedStatus: string | null = null;
@@ -722,7 +841,7 @@ export class VibeLearningImageProvider implements ImageProvider {
     try {
       normalizedStatus = this.normalizeProviderTaskResponse(taskId, response, configuration).status;
     } catch (error) {
-      normalizationErrorCode = error instanceof ImageProviderError ? error.code : "PROVIDER_DIAGNOSTIC_ERROR";
+      normalizationErrorCode = safeDiagnosticErrorCode(error);
     }
 
     return {
@@ -761,6 +880,21 @@ export class VibeLearningImageProvider implements ImageProvider {
       responseDataType: responseDataSummary.type,
       responseDataKeys: responseDataSummary.keys,
       responseDataCount: responseDataSummary.count,
+      responseDataItemType: responseDataItemSummary.type,
+      responseDataItemKeys: responseDataItemSummary.keys,
+      responseDataItemUrlType: responseDataItemSummary.urlType,
+      responseDataItemUrlIsHttps: responseDataItemSummary.urlIsHttps,
+      responseDataItemB64Type: responseDataItemSummary.b64Type,
+      responseDataItemB64Length: responseDataItemSummary.b64Length,
+      responseDataItemB64HasDataUrlPrefix: responseDataItemSummary.b64HasDataUrlPrefix,
+      responseDataItemB64HasWhitespace: responseDataItemSummary.b64HasWhitespace,
+      responseDataItemB64LengthMod4: responseDataItemSummary.b64LengthMod4,
+      responseDataItemB64AlphabetValid: responseDataItemSummary.b64AlphabetValid,
+      responseDataItemB64PaddingValid: responseDataItemSummary.b64PaddingValid,
+      responseDataItemB64DecodedPrefixValid: responseDataItemSummary.b64DecodedPrefixValid,
+      responseDataItemDetectedImageType: responseDataItemSummary.detectedImageType,
+      responseDataItemMagicValid: responseDataItemSummary.magicValid,
+      responseDataItemLikelyTruncated: responseDataItemSummary.likelyTruncated,
       responseOutputType: responseOutputSummary.type,
       responseOutputKeys: responseOutputSummary.keys,
       responseOutputCount: responseOutputSummary.count,
