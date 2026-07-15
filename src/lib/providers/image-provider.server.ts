@@ -154,42 +154,91 @@ export function normalizeTaskStatus(status: unknown): ProviderTaskStatus {
   return result;
 }
 
+// Matches the existing provider-download ceiling without retaining a full decoded binary string.
+const MAX_PROVIDER_IMAGE_BYTES = 25 * 1024 * 1024;
+const BASE64_DECODE_CHUNK_CHARS = 64 * 1024;
+
+function invalidProviderBase64(): ImageProviderError {
+  return new ImageProviderError({
+    code: "INVALID_PROVIDER_BASE64",
+    message: "供应商返回了无效的 Base64 图片数据。",
+    retryable: false,
+  });
+}
+
+function isBase64Character(code: number): boolean {
+  return (
+    (code >= 0x41 && code <= 0x5a) ||
+    (code >= 0x61 && code <= 0x7a) ||
+    (code >= 0x30 && code <= 0x39) ||
+    code === 0x2b ||
+    code === 0x2f
+  );
+}
+
 function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
-  const compact = value.replace(/\s/g, "");
-  if (!compact || compact.length % 4 === 1) {
-    throw new ImageProviderError({
-      code: "INVALID_PROVIDER_BASE64",
-      message: "供应商返回了无效的 Base64 图片数据。",
-      retryable: false,
-    });
-  }
-
-  const padded = compact.padEnd(compact.length + ((4 - (compact.length % 4)) % 4), "=");
-  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(padded)) {
-    throw new ImageProviderError({
-      code: "INVALID_PROVIDER_BASE64",
-      message: "供应商返回了无效的 Base64 图片数据。",
-      retryable: false,
-    });
-  }
-
   try {
-    const binary = atob(padded);
-    if (!binary.length) throw new Error("empty base64 payload");
-    const bytes = new Uint8Array(new ArrayBuffer(binary.length));
-    for (let index = 0; index < binary.length; index += 1) {
-      bytes[index] = binary.charCodeAt(index);
+    // Avoid copying the common provider result: already-trimmed, whitespace-free Base64.
+    let payload = /^\s|\s$/.test(value) ? value.trim() : value;
+    const dataUrlMatch = payload.match(/^data:image\/[a-z0-9.+-]+;base64,/i);
+    if (dataUrlMatch) payload = payload.slice(dataUrlMatch[0].length);
+
+    const compact = /\s/.test(payload) ? payload.replace(/\s/g, "") : payload;
+    if (!compact || compact.length % 4 === 1) throw invalidProviderBase64();
+
+    let paddingStart = compact.length;
+    while (paddingStart > 0 && compact.charCodeAt(paddingStart - 1) === 0x3d) {
+      paddingStart -= 1;
     }
+    const suppliedPadding = compact.length - paddingStart;
+    if (suppliedPadding > 2) throw invalidProviderBase64();
+
+    for (let index = 0; index < paddingStart; index += 1) {
+      if (!isBase64Character(compact.charCodeAt(index))) throw invalidProviderBase64();
+    }
+    for (let index = paddingStart; index < compact.length; index += 1) {
+      if (compact.charCodeAt(index) !== 0x3d) throw invalidProviderBase64();
+    }
+
+    const requiredPadding = (4 - (paddingStart % 4)) % 4;
+    if (requiredPadding > 2 || suppliedPadding > requiredPadding) throw invalidProviderBase64();
+    const paddedLength = paddingStart + requiredPadding;
+    const decodedLength = (paddedLength / 4) * 3 - requiredPadding;
+    if (
+      !Number.isSafeInteger(decodedLength) ||
+      decodedLength <= 0 ||
+      decodedLength > MAX_PROVIDER_IMAGE_BYTES
+    ) {
+      throw invalidProviderBase64();
+    }
+
+    const bytes = new Uint8Array(decodedLength);
+    let sourceOffset = 0;
+    let destinationOffset = 0;
+    while (sourceOffset < paddingStart) {
+      const remaining = paddingStart - sourceOffset;
+      const chunkLength = remaining > BASE64_DECODE_CHUNK_CHARS
+        ? BASE64_DECODE_CHUNK_CHARS
+        : remaining;
+      const isFinalChunk = sourceOffset + chunkLength === paddingStart;
+      const chunkPadding = isFinalChunk ? requiredPadding : 0;
+      const binary = atob(
+        compact.slice(sourceOffset, sourceOffset + chunkLength) + "=".repeat(chunkPadding),
+      );
+      if (!binary.length || destinationOffset + binary.length > bytes.length) {
+        throw invalidProviderBase64();
+      }
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[destinationOffset + index] = binary.charCodeAt(index);
+      }
+      destinationOffset += binary.length;
+      sourceOffset += chunkLength;
+    }
+    if (destinationOffset !== bytes.length) throw invalidProviderBase64();
     return bytes;
   } catch (error) {
-    throw new ImageProviderError(
-      {
-        code: "INVALID_PROVIDER_BASE64",
-        message: "供应商返回了无效的 Base64 图片数据。",
-        retryable: false,
-      },
-      { cause: error },
-    );
+    if (error instanceof ImageProviderError) throw error;
+    throw invalidProviderBase64();
   }
 }
 
@@ -228,14 +277,12 @@ function normalizeImageResult(item: unknown, defaultMimeType: string): Normalize
   }
 
   if (typeof record.b64_json === "string") {
-    let payload = record.b64_json.trim();
     let mimeType = normalizeMimeType(record.mime_type, defaultMimeType);
-    const dataUrlMatch = payload.match(/^data:(image\/[a-z0-9.+-]+);base64,(.*)$/is);
+    const dataUrlMatch = record.b64_json.match(/^\s*data:(image\/[a-z0-9.+-]+);base64,/i);
     if (dataUrlMatch) {
       mimeType = normalizeMimeType(dataUrlMatch[1], mimeType);
-      payload = dataUrlMatch[2];
     }
-    return { kind: "base64", bytes: decodeBase64(payload), mimeType };
+    return { kind: "base64", bytes: decodeBase64(record.b64_json), mimeType };
   }
 
   throw new ImageProviderError({

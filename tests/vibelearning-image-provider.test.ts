@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import type { ImageGenerationInput } from "../src/lib/generation.schemas";
-import { ImageProviderError } from "../src/lib/providers/image-provider.server";
+import {
+  ImageProviderError,
+  normalizeImageResults,
+} from "../src/lib/providers/image-provider.server";
 import {
   resolveProviderSize,
   VibeLearningImageProvider,
@@ -57,6 +60,20 @@ function jsonResponse(payload: unknown, status = 200): Response {
 function pngBase64(): { bytes: Uint8Array; encoded: string } {
   const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   return { bytes, encoded: btoa(String.fromCharCode(...bytes)) };
+}
+
+function encodeBytesAsBase64(bytes: Uint8Array): string {
+  const chunks: string[] = [];
+  const chunkSize = 8190;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    let binary = "";
+    const end = Math.min(offset + chunkSize, bytes.length);
+    for (let index = offset; index < end; index += 1) {
+      binary += String.fromCharCode(bytes[index]);
+    }
+    chunks.push(btoa(binary));
+  }
+  return chunks.join("");
 }
 
 async function diagnoseResponseDataItem(value: unknown) {
@@ -763,6 +780,101 @@ describe("VibeLearningImageProvider", () => {
       status: "processing",
       images: [],
     });
+  });
+
+  test("keeps strict Base64 compatibility for whitespace, missing padding, and data URLs", () => {
+    const encoded = "AQIDBA==";
+
+    expect(normalizeImageResults({ b64_json: "AQID\nBA==" })[0]).toMatchObject({
+      kind: "base64",
+      bytes: new Uint8Array([1, 2, 3, 4]),
+    });
+    expect(normalizeImageResults({ b64_json: "AQI" })[0]).toMatchObject({
+      kind: "base64",
+      bytes: new Uint8Array([1, 2]),
+    });
+    expect(normalizeImageResults({ b64_json: "AQ" })[0]).toMatchObject({
+      kind: "base64",
+      bytes: new Uint8Array([1]),
+    });
+    expect(normalizeImageResults({ b64_json: `data:image/png;base64,${encoded}` })[0]).toMatchObject({
+      kind: "base64",
+      mimeType: "image/png",
+      bytes: new Uint8Array([1, 2, 3, 4]),
+    });
+  });
+
+  test.each([
+    ["png", new Uint8Array([0x89, 0x50, 0x4e, 0x47])],
+    ["jpeg", new Uint8Array([0xff, 0xd8, 0xff, 0xe0])],
+    ["webp", new Uint8Array([0x52, 0x49, 0x46, 0x46])],
+  ] as const)("decodes a standard %s Base64 result", (_type, bytes) => {
+    const result = normalizeImageResults({ b64_json: encodeBytesAsBase64(bytes) })[0];
+
+    expect(result).toMatchObject({ kind: "base64", bytes });
+  });
+
+  test.each([
+    "A",
+    "AQ!D",
+    "A=ID",
+    "AQI===",
+  ])("maps invalid Base64 input to the safe error code", (b64_json) => {
+    expect(() => normalizeImageResults({ b64_json })).toThrow(
+      expect.objectContaining({ code: "INVALID_PROVIDER_BASE64" }),
+    );
+  });
+
+  test("decodes large Base64 data in bounded atob chunks", () => {
+    const bytes = new Uint8Array(160 * 1024);
+    bytes[0] = 0x89;
+    bytes[1] = 0x50;
+    bytes[bytes.length - 2] = 0x7e;
+    bytes[bytes.length - 1] = 0x42;
+    const encoded = encodeBytesAsBase64(bytes);
+    const originalAtob = globalThis.atob;
+    const maxChunkChars = 64 * 1024;
+    let calls = 0;
+
+    globalThis.atob = ((chunk: string) => {
+      calls += 1;
+      if (chunk.length > maxChunkChars) throw new Error("chunk too large");
+      return originalAtob(chunk);
+    }) as typeof atob;
+    try {
+      const result = normalizeImageResults({ b64_json: encoded })[0];
+      expect(result).toMatchObject({ kind: "base64" });
+      if (result.kind !== "base64") throw new Error("unexpected image kind");
+      expect(result.bytes.length).toBe(bytes.length);
+      expect(result.bytes.slice(0, 2)).toEqual(bytes.slice(0, 2));
+      expect(result.bytes.slice(-2)).toEqual(bytes.slice(-2));
+      expect(calls).toBeGreaterThan(1);
+    } finally {
+      globalThis.atob = originalAtob;
+    }
+  });
+
+  test("converts ordinary decoder runtime failures to INVALID_PROVIDER_BASE64", () => {
+    const originalAtob = globalThis.atob;
+    globalThis.atob = (() => {
+      throw new Error("decoder implementation detail");
+    }) as typeof atob;
+    try {
+      expect(() => normalizeImageResults({ b64_json: "AQIDBA==" })).toThrow(
+        expect.objectContaining({ code: "INVALID_PROVIDER_BASE64" }),
+      );
+    } finally {
+      globalThis.atob = originalAtob;
+    }
+  });
+
+  test("rejects Base64 whose decoded size exceeds the provider image limit", () => {
+    const overLimitLength = Math.floor((25 * 1024 * 1024 * 4) / 3) + 4;
+    const oversized = "A".repeat(overLimitLength - (overLimitLength % 4));
+
+    expect(() => normalizeImageResults({ b64_json: oversized })).toThrow(
+      expect.objectContaining({ code: "INVALID_PROVIDER_BASE64" }),
+    );
   });
 
   test("rejects non-HTTPS provider result URLs", async () => {
