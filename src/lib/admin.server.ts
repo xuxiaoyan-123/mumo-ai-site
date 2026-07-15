@@ -1,11 +1,22 @@
 import "@tanstack/react-start/server-only";
 import { getRequest } from "@tanstack/react-start/server";
+import { getStartContext } from "@tanstack/start-storage-context";
 import { getSessionFromRequest, hashPassword, normalizeEmail, verifyPassword } from "@/lib/auth";
 import { getD1, type D1Database } from "@/lib/d1";
+import type { MumoCloudflareEnv } from "@/env";
+import { createDefaultProviderRegistry } from "@/lib/providers/provider-registry.server";
+import { VibeLearningImageProvider, type ProviderTaskDiagnostic } from "@/lib/providers/vibelearning-image.server";
 
 type Input = Record<string, any>;
 type AdminContext = { db: D1Database; userId: string; role: "owner" | "admin" };
 type AdminRole = "owner" | "admin";
+
+export class AdminProviderDiagnosticError extends Error {
+  constructor(readonly code: "INVALID_GENERATION_TASK_ID" | "GENERATION_TASK_NOT_FOUND" | "PROVIDER_TASK_UNAVAILABLE" | "PROVIDER_DIAGNOSTIC_UNSUPPORTED") {
+    super("供应商任务诊断请求无效。 ");
+    this.name = "AdminProviderDiagnosticError";
+  }
+}
 
 export function getD1ServerOnly(): D1Database {
   return getD1();
@@ -61,6 +72,14 @@ async function withAdmin<T>(operation: (context: AdminContext) => Promise<T>, ow
   });
 }
 
+async function withUser<T>(operation: (context: { db: D1Database; userId: string }) => Promise<T>): Promise<T> {
+  return withDb(async (db) => {
+    const session = await getSessionServerOnly();
+    if (!session) throw new Error("请先登录");
+    return operation({ db, userId: session.user.id });
+  });
+}
+
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
   try { return JSON.parse(value) as T; } catch { return fallback; }
@@ -103,6 +122,63 @@ function getStringInput(data: Input, key: string): string {
   }
   return "";
 }
+
+function resolveAdminEnv(): MumoCloudflareEnv {
+  const startContext = getStartContext({ throwIfNotFound: false });
+  const context = startContext?.contextAfterGlobalMiddlewares as
+    | { cloudflare?: { env?: unknown }; cloudflareEnv?: unknown }
+    | undefined;
+  const globalRecord = globalThis as typeof globalThis & {
+    __MUMO_CLOUDFLARE_ENV__?: unknown;
+    __env__?: unknown;
+  };
+  const asEnv = (value: unknown): MumoCloudflareEnv =>
+    value && typeof value === "object" ? value as MumoCloudflareEnv : {};
+  return {
+    ...asEnv(globalRecord.__MUMO_CLOUDFLARE_ENV__ ?? globalRecord.__env__),
+    ...asEnv(context?.cloudflare?.env ?? context?.cloudflareEnv),
+  };
+}
+
+function requireGenerationTaskId(value: string): string {
+  const taskId = value.trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(taskId)) {
+    throw new AdminProviderDiagnosticError("INVALID_GENERATION_TASK_ID");
+  }
+  return taskId;
+}
+
+export const adminDiagnoseGenerationProviderTask = serverFn(async (data) => withAdmin(async ({ db }) => {
+  const generationTaskId = requireGenerationTaskId(getStringInput(data, "generationTaskId"));
+  const task = await db.prepare(
+    `SELECT id, provider, provider_task_id, generation_mode
+     FROM generation_tasks WHERE id = ? LIMIT 1`,
+  ).bind(generationTaskId).first<{
+    id: string;
+    provider: string | null;
+    provider_task_id: string | null;
+    generation_mode: "text_to_image" | "image_to_image" | null;
+  }>();
+  if (!task) throw new AdminProviderDiagnosticError("GENERATION_TASK_NOT_FOUND");
+  if (!task.provider || !task.provider_task_id || !task.generation_mode) {
+    throw new AdminProviderDiagnosticError("PROVIDER_TASK_UNAVAILABLE");
+  }
+
+  const env = resolveAdminEnv();
+  const registry = createDefaultProviderRegistry({
+    allowRealProviders: env.MUMO_ENABLE_REAL_IMAGE_PROVIDERS === "true",
+  });
+  const provider = await registry.getRuntime(task.provider, { db, env });
+  if (!(provider instanceof VibeLearningImageProvider)) {
+    throw new AdminProviderDiagnosticError("PROVIDER_DIAGNOSTIC_UNSUPPORTED");
+  }
+
+  return provider.diagnoseProviderTask({
+    generationTaskId: task.id,
+    taskId: task.provider_task_id,
+    mode: task.generation_mode === "image_to_image" ? "image-to-image" : "text-to-image",
+  }) satisfies ProviderTaskDiagnostic;
+}, "GET"));
 
 async function countOwners(db: D1Database): Promise<number> {
   const row = await db.prepare("SELECT COUNT(*) AS value FROM admin_users WHERE role = 'owner'")
@@ -428,10 +504,75 @@ export const adminUpdateModelPrice = serverFn(async (data) => withAdmin(async ({
   await db.prepare("UPDATE models_config SET cost_credits = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? OR model_key = ?")
     .bind(Math.max(0, Number(data.cost_credits ?? data.credits ?? 0)), String(data.id ?? ""), String(data.model_key ?? "")).run(); return { ok: true };
 }));
+
+type ModelConfigurationUpdate = Record<string, unknown>;
+
+function hasOwn(input: ModelConfigurationUpdate, key: string) {
+  return Object.prototype.hasOwnProperty.call(input, key);
+}
+
+function requiredText(value: unknown, label: string, maxLength = 128) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text || text.length > maxLength) throw new Error(`${label}无效`);
+  return text;
+}
+
+function parseSupportedModes(value: unknown): string {
+  const modes = Array.isArray(value) ? value : typeof value === "string" ? JSON.parse(value) : null;
+  if (!Array.isArray(modes) || modes.length === 0 || modes.some((mode) => mode !== "text_to_image" && mode !== "image_to_image")) {
+    throw new Error("支持模式无效");
+  }
+  return JSON.stringify([...new Set(modes)]);
+}
+
+export async function updateModelConfiguration(
+  db: D1Database,
+  input: ModelConfigurationUpdate,
+): Promise<{ ok: true }> {
+  if (hasOwn(input, "apiKey") || hasOwn(input, "api_key")) throw new Error("不接受 API Key");
+  const id = requiredText(input.id, "模型 ID");
+  const updates: Array<{ column: string; value: unknown }> = [];
+  if (hasOwn(input, "display_name")) updates.push({ column: "display_name", value: requiredText(input.display_name, "显示名称") });
+  if (hasOwn(input, "provider")) {
+    const provider = requiredText(input.provider, "供应商").toLowerCase();
+    if (!/^[a-z0-9_-]+$/.test(provider)) throw new Error("供应商无效");
+    updates.push({ column: "provider", value: provider });
+  }
+  if (hasOwn(input, "provider_model")) updates.push({ column: "provider_model", value: requiredText(input.provider_model, "供应商模型 ID") });
+  if (hasOwn(input, "cost_credits")) {
+    const value = Number(input.cost_credits);
+    if (!Number.isSafeInteger(value) || value < 0) throw new Error("创作点无效");
+    updates.push({ column: "cost_credits", value });
+  }
+  if (hasOwn(input, "is_enabled")) {
+    const value = input.is_enabled === true || input.is_enabled === 1 || input.is_enabled === "1" ? 1 : input.is_enabled === false || input.is_enabled === 0 || input.is_enabled === "0" ? 0 : null;
+    if (value === null) throw new Error("启用状态无效");
+    updates.push({ column: "is_enabled", value });
+  }
+  if (hasOwn(input, "sort_order")) {
+    const value = Number(input.sort_order);
+    if (!Number.isSafeInteger(value) || value < 0 || value > 100000) throw new Error("排序值无效");
+    updates.push({ column: "sort_order", value });
+  }
+  if (hasOwn(input, "supported_modes")) updates.push({ column: "supported_modes", value: parseSupportedModes(input.supported_modes) });
+  if (hasOwn(input, "max_reference_images")) {
+    const value = Number(input.max_reference_images);
+    if (!Number.isSafeInteger(value) || value < 0 || value > 5) throw new Error("最大参考图数量无效");
+    updates.push({ column: "max_reference_images", value });
+  }
+  if (hasOwn(input, "description")) updates.push({ column: "description", value: typeof input.description === "string" ? input.description.trim().slice(0, 1000) || null : null });
+  if (updates.length === 0) throw new Error("没有可更新的模型字段");
+
+  const assignments = updates.map(({ column }) => `${column} = ?`).join(", ");
+  const result = await db.prepare(
+    `UPDATE models_config SET ${assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+  ).bind(...updates.map(({ value }) => value), id).run();
+  if (!result.success || result.meta?.changes !== 1) throw new Error("模型不存在或未更新");
+  return { ok: true };
+}
+
 export const adminUpdateModel = serverFn(async (data) => withAdmin(async ({ db }) => {
-  await db.prepare(`UPDATE models_config SET display_name = ?, provider = ?, provider_model = ?, task_type = ?, cost_credits = ?,
-    is_enabled = ?, sort_order = ?, description = ?, input_schema_json = ?, extra_config_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-    .bind(data.display_name, data.provider, data.provider_model, data.task_type, Number(data.cost_credits ?? 0), boolInt(data.is_enabled), Number(data.sort_order ?? 0), data.description ?? null, data.input_schema_json ?? null, data.extra_config_json ?? null, String(data.id ?? "")).run(); return { ok: true };
+  return updateModelConfiguration(db, data);
 }));
 export const adminCreateModel = serverFn(async (data) => withAdmin(async ({ db }) => {
   const id = String(data.id ?? makeId());
@@ -444,6 +585,31 @@ export const adminCreateModel = serverFn(async (data) => withAdmin(async ({ db }
 }));
 export const adminDeleteModel = serverFn(async (data) => withAdmin(async ({ db }) => {
   await db.prepare("DELETE FROM models_config WHERE id = ?").bind(String(data.id ?? "")).run(); return { ok: true };
+}));
+
+export const adminGetProviderConfigurationStatuses = serverFn(async () => withAdmin(async ({ db }) => {
+  const { getProviderConfigurationStatuses } = await import("@/lib/providers/provider-configuration.server");
+  return getProviderConfigurationStatuses(db);
+}), "GET");
+
+export const adminListProviderCredentials = serverFn(async () => withAdmin(async ({ db }) => {
+  const { listProviderCredentialStatuses } = await import("@/lib/provider-credentials.server");
+  return listProviderCredentialStatuses(db);
+}), "GET");
+
+export const adminUpsertProviderCredential = serverFn(async (data) => withAdmin(async ({ db, userId }) => {
+  const { upsertProviderCredential } = await import("@/lib/provider-credentials.server");
+  return upsertProviderCredential(db, {
+    provider: data.provider,
+    baseUrl: data.baseUrl,
+    apiKey: data.apiKey,
+    isEnabled: data.isEnabled,
+  }, userId);
+}));
+
+export const adminClearProviderCredential = serverFn(async (data) => withAdmin(async ({ db, userId }) => {
+  const { clearProviderCredential } = await import("@/lib/provider-credentials.server");
+  return clearProviderCredential(db, data.provider, userId);
 }));
 
 export const adminGetGlobalConfig = serverFn(async () => withAdmin(async ({ db }) => ({
@@ -580,16 +746,81 @@ export const adminSetSystemPrompt = serverFn(async (data) => withAdmin(async ({ 
   await setSetting(db, "system_prompt", { prompt: String(data.prompt ?? "") }, userId); return { ok: true };
 }));
 
-// Generation remains intentionally unavailable until its separate provider integration is approved.
-export const consumeGeneration = pendingServerFn("consumeGeneration");
-export const getMyGenerationHistory = serverFn(async () => ({ items: [], hasMore: false }), "GET");
-export const getMyGenerationTasks = serverFn(async () => [], "GET");
-export const createGenerationTask = pendingServerFn("createGenerationTask");
-export const cancelMyQueuedGenerationTasks = pendingServerFn("cancelMyQueuedGenerationTasks");
-export const cancelGenerationTask = pendingServerFn("cancelGenerationTask");
-export const startGenerationTask = pendingServerFn("startGenerationTask");
-export const pollGenerationTask = pendingServerFn("pollGenerationTask");
-export const generateImage = pendingServerFn("generateImage");
+export const getMyGenerationHistory = serverFn(async (data) => withUser(async ({ db, userId }) => {
+  const { listGenerationHistoryForUser } = await import("@/lib/generation.server");
+  return listGenerationHistoryForUser(userId, {
+    limit: Number(data.limit ?? 20),
+    offset: Number(data.offset ?? 0),
+  }, { db });
+}), "GET");
+
+export const getMyGenerationTasks = serverFn(async () => withUser(async ({ db, userId }) => {
+  const { listGenerationTasksForUser } = await import("@/lib/generation.server");
+  return listGenerationTasksForUser(userId, { db });
+}), "GET");
+
+export const createGenerationTask = serverFn(async (data) => withUser(async ({ db, userId }) => {
+  const { createGenerationTaskForUser } = await import("@/lib/generation.server");
+  const parameters = data.parameters && typeof data.parameters === "object" ? data.parameters : {};
+  return createGenerationTaskForUser(userId, {
+    modelKey: String(data.modelKey ?? ""),
+    prompt: String(data.prompt ?? ""),
+    referenceImageIds: Array.isArray(data.referenceImageIds)
+      ? data.referenceImageIds.filter((id): id is string => typeof id === "string")
+      : [],
+    parameters: {
+      aspectRatio: String(parameters.aspectRatio ?? "1:1"),
+      quality:
+        parameters.quality === "2K" || parameters.quality === "4K" ? parameters.quality : "1K",
+    },
+    idempotencyKey: String(data.idempotencyKey ?? ""),
+  }, { db });
+}));
+
+export const pollGenerationTask = serverFn(async (data) => withUser(async ({ db, userId }) => {
+  const { pollGenerationTaskForUser } = await import("@/lib/generation.server");
+  return pollGenerationTaskForUser(userId, String(data.taskId ?? ""), { db });
+}));
+
+export const cancelMyQueuedGenerationTasks = serverFn(async () => withUser(async ({ db, userId }) => {
+  await db.prepare(
+    `UPDATE generation_tasks SET status = 'canceled', updated_at = CURRENT_TIMESTAMP
+     WHERE user_id = ? AND status = 'queued' AND deduction_ledger_id IS NULL`,
+  ).bind(userId).run();
+  return { ok: true };
+}));
+
+export async function cancelGenerationTaskForUser(
+  db: D1Database,
+  userId: string,
+  rawTaskId: unknown,
+): Promise<{ taskId: string; status: "canceled" }> {
+  const taskId = String(rawTaskId ?? "").trim();
+  const result = await db.prepare(
+    `UPDATE generation_tasks SET status = 'canceled', updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND user_id = ? AND status = 'queued' AND deduction_ledger_id IS NULL`,
+  ).bind(taskId, userId).run();
+  if (result.success === true && result.meta?.changes === 1) {
+    return { taskId, status: "canceled" };
+  }
+
+  const task = await db.prepare(
+    "SELECT status, deduction_ledger_id FROM generation_tasks WHERE id = ? AND user_id = ? LIMIT 1",
+  ).bind(taskId, userId).first<{ status: string; deduction_ledger_id: string | null }>();
+  if (!task) throw new Error("任务不存在或无权操作");
+  if (task.status !== "queued" || task.deduction_ledger_id !== null) {
+    throw new Error("任务已开始或已扣费，无法取消");
+  }
+  throw new Error("任务状态已变化，请重试");
+}
+
+export const cancelGenerationTask = serverFn(async (data) => withUser(async ({ db, userId }) => {
+  return cancelGenerationTaskForUser(db, userId, data.taskId);
+}));
+
+export const startGenerationTask = pollGenerationTask;
+export const consumeGeneration = createGenerationTask;
+export const generateImage = createGenerationTask;
 export const checkImageStatus = pendingServerFn("checkImageStatus");
 export const generateRandomPrompt = pendingServerFn("generateRandomPrompt");
 export const adminTestModel = pendingServerFn("adminTestModel");

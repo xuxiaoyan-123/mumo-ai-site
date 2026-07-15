@@ -5,8 +5,11 @@ import { Canvas } from "./Canvas";
 import { TopBar } from "./TopBar";
 import { TaskFloatingPanel, type FloatingTask } from "./TaskFloatingPanel";
 import {
+  getReferenceImageIds,
   getModelOption,
+  restoreGenerationInputParameters,
   restoreGenerationParameters,
+  type GenerationInputParameters,
   type GenerationPrefill,
   type GenerationSubmission,
 } from "./generation-options";
@@ -36,27 +39,18 @@ type StoredLatestResult = {
 type ReuseSource = {
   prompt: string;
   modelKey?: string;
-  inputParams?: Record<string, unknown>;
+  inputParams?: unknown;
 };
-
-function getReusableReferenceImages(inputParams?: Record<string, unknown>) {
-  return Array.isArray(inputParams?.referenceImages)
-    ? inputParams.referenceImages.filter(
-        (url): url is string =>
-          typeof url === "string" && (/^https?:\/\//i.test(url) || /^blob:/i.test(url)),
-      )
-    : [];
-}
 
 function createGenerationPrefill(
   prompt: string,
   modelKey?: string,
-  inputParams?: Record<string, unknown>,
+  inputParams?: unknown,
 ): GenerationPrefill {
   return {
     nonce: Date.now(),
     prompt,
-    referenceImages: getReusableReferenceImages(inputParams),
+    referenceImageIds: getReferenceImageIds(inputParams),
     parameters: restoreGenerationParameters(modelKey, inputParams),
   };
 }
@@ -236,7 +230,7 @@ export function Studio() {
     setRetryPrefill(null);
     setReusePrefill(null);
     setCurrentReuseSource(null);
-    setReferenceResetToken(0);
+    setReferenceResetToken((token) => token + 1);
     pollingTaskIdsRef.current.clear();
   }, [session?.user?.id]);
 
@@ -252,7 +246,7 @@ export function Studio() {
       setRetryPrefill(null);
       setReusePrefill(null);
       setCurrentReuseSource(null);
-      setReferenceResetToken(0);
+      setReferenceResetToken((token) => token + 1);
       pollingTaskIdsRef.current.clear();
       return;
     }
@@ -262,11 +256,12 @@ export function Studio() {
         const recovered = (res?.items ?? [])
           .map(
             (task: {
-              id: string;
+              taskId: string;
               prompt: string | null;
               modelId: string;
+              modelName?: string;
               status: string;
-              inputParams?: Record<string, unknown> | null;
+              inputParams?: unknown;
               resultImageUrl?: string | null;
               deductionStatus?: string | null;
               deductionId?: string | null;
@@ -274,13 +269,13 @@ export function Studio() {
             }) => {
               const promptTitle = task.prompt?.trim().slice(0, 20);
               return {
-                id: task.id,
+                id: task.taskId,
                 title: promptTitle || task.modelId || "生成任务",
                 status: mapRecoveredTaskStatus(task.status, task.deductionStatus, task.deductionId),
                 prompt: task.prompt ?? "",
                 modelKey: task.modelId,
-                modelName: task.modelId,
-                inputParams: task.inputParams ?? {},
+                modelName: task.modelName ?? task.modelId,
+                inputParams: restoreGenerationInputParameters(task.modelId, task.inputParams),
                 resultImageUrl: task.resultImageUrl ?? null,
                 errorMessage: task.errorMessage ?? null,
               };
@@ -402,12 +397,20 @@ export function Studio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id, adminTasks]);
 
-  const handleGenerateStart = ({ prompt, referenceImages, parameters }: GenerationSubmission) => {
+  const handleGenerateStart = async ({
+    prompt,
+    referenceImageIds,
+    parameters,
+  }: GenerationSubmission) => {
+    if (!session) {
+      setForceAuth(true);
+      return;
+    }
     const model = getModelOption(parameters.model);
-    const inputParams: Record<string, unknown> = {
+    const inputParams: GenerationInputParameters = {
       aspectRatio: parameters.aspectRatio,
       quality: parameters.quality,
-      referenceImages,
+      referenceImageIds,
       // Concrete pixels will be derived server-side from aspectRatio + quality.
       // UI estimate only. A future server request must ignore this and read models_config.
       costCredits: parameters.costCredits,
@@ -421,7 +424,58 @@ export function Studio() {
       modelKey: parameters.model,
       inputParams,
     });
-    toast.info("生成参数已传入工作区，模型服务尚未接入");
+    setGenerating(true);
+    setProgress({
+      stage: "submitting",
+      attempt: 0,
+      elapsedSec: 0,
+      message: "正在创建生成任务...",
+    });
+    try {
+      const task = await createTask({
+        data: {
+          modelKey: parameters.model,
+          prompt,
+          referenceImageIds,
+          parameters: {
+            aspectRatio: parameters.aspectRatio,
+            quality: parameters.quality,
+          },
+          idempotencyKey: crypto.randomUUID(),
+        },
+      });
+      const floatingTask: FloatingTask = {
+        id: task.taskId,
+        title: prompt.slice(0, 20) || task.modelName,
+        status:
+          task.status === "succeeded"
+            ? "done"
+            : task.status === "failed"
+              ? "failed"
+              : task.status === "running"
+                ? "generating"
+                : "waiting",
+        prompt,
+        modelKey: task.modelId,
+        modelName: task.modelName,
+        inputParams: task.inputParams,
+        resultImageUrl: task.resultImageUrl,
+        errorMessage: task.errorMessage,
+      };
+      setAdminTasks((tasks) => trimPanelTasks([floatingTask, ...tasks]));
+      if (task.status === "failed") {
+        setProgress(null);
+        toast.error(task.errorMessage ?? "任务创建失败，请稍后重试。");
+      } else {
+        setProgress(getQueueProgress(floatingTask));
+        toast.success("生成任务已创建");
+      }
+    } catch (error) {
+      setProgress(null);
+      toast.error(error instanceof Error ? error.message : "任务创建失败，请稍后重试。");
+    } finally {
+      setGenerating(false);
+    }
   };
   const handleGenerateDone = (url: string | null) => {
     setGenerating(false);
@@ -459,7 +513,7 @@ export function Studio() {
     prompt: string;
     modelKey: string;
     modelName: string;
-    inputParams: Record<string, unknown>;
+    inputParams: GenerationInputParameters;
   }) => {
     if (!session) return false;
     if (effectiveCurrentBatchTaskCount >= 3) {
@@ -470,7 +524,12 @@ export function Studio() {
       data: {
         modelKey: input.modelKey,
         prompt: input.prompt,
-        inputParams: input.inputParams,
+        referenceImageIds: input.inputParams.referenceImageIds,
+        parameters: {
+          aspectRatio: input.inputParams.aspectRatio,
+          quality: input.inputParams.quality,
+        },
+        idempotencyKey: crypto.randomUUID(),
       },
     });
 
@@ -547,11 +606,18 @@ export function Studio() {
 
     setRetryingTaskIds((ids) => (ids.includes(taskId) ? ids : [...ids, taskId]));
     try {
+      const retryInputParams =
+        failedTask.inputParams ?? restoreGenerationInputParameters(failedTask.modelKey);
       const task = await createTask({
         data: {
           modelKey: failedTask.modelKey,
           prompt: failedTask.prompt,
-          inputParams: failedTask.inputParams ?? {},
+          referenceImageIds: retryInputParams.referenceImageIds,
+          parameters: {
+            aspectRatio: retryInputParams.aspectRatio,
+            quality: retryInputParams.quality,
+          },
+          idempotencyKey: crypto.randomUUID(),
         },
       });
       const title = task.prompt.trim().slice(0, 20) || failedTask.modelName || task.modelId;
@@ -562,7 +628,7 @@ export function Studio() {
         prompt: task.prompt,
         modelKey: failedTask.modelKey,
         modelName: failedTask.modelName ?? task.modelId,
-        inputParams: failedTask.inputParams ?? {},
+        inputParams: retryInputParams,
       };
       setAdminTasks((tasks) => trimPanelTasks([...tasks, queuedTask]));
       prepareCanvasForNewTask(queuedTask, {
@@ -713,14 +779,9 @@ export function Studio() {
       return;
     }
 
-    const referenceImages = getReusableReferenceImages(source.inputParams);
-    setReusePrefill(
-      createGenerationPrefill(source.prompt, source.modelKey, {
-        ...(source.inputParams ?? {}),
-        referenceImages,
-      }),
-    );
-    if (referenceImages.length > 0) {
+    const referenceImageIds = getReferenceImageIds(source.inputParams);
+    setReusePrefill(createGenerationPrefill(source.prompt, source.modelKey, source.inputParams));
+    if (referenceImageIds.length > 0) {
       toast.success("已复用提示词和参考图，可修改后再次生成");
     } else {
       toast.message("已复用提示词，未找到可复用参考图");

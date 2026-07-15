@@ -6,10 +6,12 @@ const FALLBACK_FILENAME = "mumo-generated-image.png";
 
 function getR2PublicBaseUrl(): URL | null {
   const globalEnv = (globalThis as Record<string, unknown>)[CLOUDFLARE_ENV_GLOBAL_KEY];
-  const cloudflareEnv = globalEnv && typeof globalEnv === "object"
-    ? (globalEnv as { R2_PUBLIC_BASE_URL?: string })
-    : undefined;
-  const value = cloudflareEnv?.R2_PUBLIC_BASE_URL ??
+  const cloudflareEnv =
+    globalEnv && typeof globalEnv === "object"
+      ? (globalEnv as { R2_PUBLIC_BASE_URL?: string })
+      : undefined;
+  const value =
+    cloudflareEnv?.R2_PUBLIC_BASE_URL ??
     (typeof process !== "undefined" ? process.env.R2_PUBLIC_BASE_URL : undefined);
   if (!value) return null;
 
@@ -58,6 +60,31 @@ export const Route = createFileRoute("/api/download-image")({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        const requestUrl = new URL(request.url);
+        const taskId = requestUrl.searchParams.get("taskId")?.trim();
+        if (taskId) {
+          try {
+            const [{ requireAuth }, { getGeneratedImageForUser }] = await Promise.all([
+              import("@/lib/auth"),
+              import("@/lib/generation.server"),
+            ]);
+            const session = await requireAuth(request);
+            const result = await getGeneratedImageForUser(session.user.id, taskId);
+            return new Response(result.body, {
+              status: 200,
+              headers: {
+                "Content-Type": result.contentType,
+                "Content-Disposition": `inline; filename="${FALLBACK_FILENAME}"`,
+                "Cache-Control": "private, max-age=300",
+                "X-Content-Type-Options": "nosniff",
+              },
+            });
+          } catch (error) {
+            if (error instanceof Response && error.status === 401) return error;
+            return new Response("Result unavailable", { status: 404 });
+          }
+        }
+
         const target = getAllowedImageUrl(request);
         if (!target) {
           return new Response("Forbidden", { status: 403 });

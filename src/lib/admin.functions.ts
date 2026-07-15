@@ -256,6 +256,34 @@ export const adminDeleteModel = createServerFn({ method: "POST" })
     return adminDeleteModel(data);
   });
 
+export const adminGetProviderConfigurationStatuses = createServerFn({ method: "GET" })
+  .inputValidator(inputValidator)
+  .handler(async ({ data }: { data: Input }) => {
+    const { adminGetProviderConfigurationStatuses } = await import("@/lib/admin.server");
+    return adminGetProviderConfigurationStatuses(data);
+  });
+
+export const adminListProviderCredentials = createServerFn({ method: "GET" })
+  .inputValidator(inputValidator)
+  .handler(async ({ data }: { data: Input }) => {
+    const { adminListProviderCredentials } = await import("@/lib/admin.server");
+    return adminListProviderCredentials(data);
+  });
+
+export const adminUpsertProviderCredential = createServerFn({ method: "POST" })
+  .inputValidator(inputValidator)
+  .handler(async ({ data }: { data: Input }) => {
+    const { adminUpsertProviderCredential } = await import("@/lib/admin.server");
+    return adminUpsertProviderCredential(data);
+  });
+
+export const adminClearProviderCredential = createServerFn({ method: "POST" })
+  .inputValidator(inputValidator)
+  .handler(async ({ data }: { data: Input }) => {
+    const { adminClearProviderCredential } = await import("@/lib/admin.server");
+    return adminClearProviderCredential(data);
+  });
+
 export const adminGetGlobalConfig = createServerFn({ method: "POST" })
   .inputValidator(inputValidator)
   .handler(async ({ data }: { data: Input }) => {
