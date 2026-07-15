@@ -5,6 +5,11 @@ import { Canvas } from "./Canvas";
 import { TopBar } from "./TopBar";
 import { TaskFloatingPanel, type FloatingTask } from "./TaskFloatingPanel";
 import {
+  createGenerationSubmissionFingerprint,
+  GenerationSubmitGuard,
+  submitStudioGeneration,
+} from "./generation-submit-guard";
+import {
   getReferenceImageIds,
   getModelOption,
   restoreGenerationInputParameters,
@@ -147,6 +152,7 @@ export function Studio() {
   const [currentReuseSource, setCurrentReuseSource] = useState<ReuseSource | null>(null);
   const [referenceResetToken, setReferenceResetToken] = useState(0);
   const pollingTaskIdsRef = useRef<Set<string>>(new Set());
+  const submitGuardRef = useRef(new GenerationSubmitGuard());
   const adminActiveTaskCount = adminTasks.filter(
     (task) =>
       task.status === "waiting" || task.status === "submitting" || task.status === "generating",
@@ -232,6 +238,7 @@ export function Studio() {
     setCurrentReuseSource(null);
     setReferenceResetToken((token) => token + 1);
     pollingTaskIdsRef.current.clear();
+    submitGuardRef.current.reset();
   }, [session?.user?.id]);
 
   useEffect(() => {
@@ -248,6 +255,7 @@ export function Studio() {
       setCurrentReuseSource(null);
       setReferenceResetToken((token) => token + 1);
       pollingTaskIdsRef.current.clear();
+      submitGuardRef.current.reset();
       return;
     }
     fetchGenerationTasks({})
@@ -366,6 +374,7 @@ export function Studio() {
               return;
             }
             if (task.status === "failed" || task.status === "succeeded") {
+              submitGuardRef.current.completeTask(task.taskId);
               setProgress(null);
               setAdminTasks((tasks) =>
                 tasks.map((item) =>
@@ -415,35 +424,49 @@ export function Studio() {
       // UI estimate only. A future server request must ignore this and read models_config.
       costCredits: parameters.costCredits,
     };
-
-    setAdminPreparingNextTask(false);
-    setCurrentPrompt(prompt);
-    setCurrentModel(model.name);
-    setCurrentReuseSource({
-      prompt,
+    const fingerprint = createGenerationSubmissionFingerprint({
       modelKey: parameters.model,
-      inputParams,
-    });
-    setGenerating(true);
-    setProgress({
-      stage: "submitting",
-      attempt: 0,
-      elapsedSec: 0,
-      message: "正在创建生成任务...",
+      prompt,
+      aspectRatio: parameters.aspectRatio,
+      quality: parameters.quality,
+      referenceImageIds,
     });
     try {
-      const task = await createTask({
-        data: {
-          modelKey: parameters.model,
-          prompt,
-          referenceImageIds,
-          parameters: {
-            aspectRatio: parameters.aspectRatio,
-            quality: parameters.quality,
-          },
-          idempotencyKey: crypto.randomUUID(),
+      const task = await submitStudioGeneration({
+        guard: submitGuardRef.current,
+        fingerprint,
+        createKey: () => crypto.randomUUID(),
+        onStarted: () => {
+          setAdminPreparingNextTask(false);
+          setCurrentPrompt(prompt);
+          setCurrentModel(model.name);
+          setCurrentReuseSource({
+            prompt,
+            modelKey: parameters.model,
+            inputParams,
+          });
+          setGenerating(true);
+          setProgress({
+            stage: "submitting",
+            attempt: 0,
+            elapsedSec: 0,
+            message: "正在创建生成任务...",
+          });
         },
+        createTask: (idempotencyKey) => createTask({
+          data: {
+            modelKey: parameters.model,
+            prompt,
+            referenceImageIds,
+            parameters: {
+              aspectRatio: parameters.aspectRatio,
+              quality: parameters.quality,
+            },
+            idempotencyKey,
+          },
+        }),
       });
+      if (!task) return;
       const floatingTask: FloatingTask = {
         id: task.taskId,
         title: prompt.slice(0, 20) || task.modelName,
@@ -683,6 +706,9 @@ export function Studio() {
       const matchedTask = adminTasks.find((item) => item.id === task.taskId);
       const finalized =
         task.status === "succeeded" && task.deductionStatus === "charged" && !!task.historyId;
+      if (task.status === "failed" || task.status === "succeeded") {
+        submitGuardRef.current.completeTask(task.taskId);
+      }
       const nextStatus = finalized
         ? "done"
         : task.status === "failed" || task.status === "succeeded"
